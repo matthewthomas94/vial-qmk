@@ -47,6 +47,13 @@
         "audio": false,
         "key_lock": false
     },
+    "encoder": {
+        "rotary": [
+            {"pin_a": "GP12", "pin_b": "GP13"},
+            {"pin_a": "GP16", "pin_b": "GP17"},
+            {"pin_a": "GP7", "pin_b": "GP6"}
+        ]
+    },
     "layouts": {
         "LAYOUT": {
             "layout": [

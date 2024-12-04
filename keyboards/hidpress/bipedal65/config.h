@@ -19,13 +19,13 @@
 #define WS2812_PIO_USE_PIO1
 #define WS2812_DI_PIN GP29
 #define RGBLED_NUM 65
-#define RGB_MATRIX_LED_COUNT RGBLED_NUM
+#define RGBLIGHT_LED_COUNT RGBLED_NUM
 
-#define ENCODERS 3
-#define ENCODERS_PAD_A \
-    { GP12, GP16, GP7 }
-#define ENCODERS_PAD_B \
-    { GP13, GP17, GP6 }
+// #define ENCODERS 3
+// #define ENCODERS_PAD_A 
+//     { GP12, GP16, GP7 }
+// #define ENCODERS_PAD_B 
+//     { GP13, GP17, GP6 }
 #define TAP_CODE_DELAY 10
 
 #undef I2C_DRIVER

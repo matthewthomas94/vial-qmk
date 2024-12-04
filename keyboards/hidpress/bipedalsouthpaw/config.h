@@ -14,14 +14,16 @@
 #define WS2812_PIO_USE_PIO1
 #define WS2812_DI_PIN GP24
 #define RGBLED_NUM 12
-#define RGB_MATRIX_LED_COUNT RGBLED_NUM
+#define RGBLIGHT_LED_COUNT RGBLED_NUM 
 
 
-#define ENCODERS 3
-#define ENCODERS_PAD_A \
-    { GP22, GP16, GP13 }
-#define ENCODERS_PAD_B \
-    { GP23, GP17, GP12 }
+#define CUSTOM_ENCODER_ENABLE
+
+//This is now defined in the onfo.json
+// #define NUMBER_OF_ENCODERS 3
+// #define ENCODER_PAD_A_PINS { GP22, GP16, GP13 }
+// #define ENCODER_PAD_B_PINS { GP23, GP17, GP12 }
+
 #define ENCODER_RESOLUTION 2
 
 #define TAP_CODE_DELAY 0

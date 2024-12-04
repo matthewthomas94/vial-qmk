@@ -6,11 +6,10 @@
 
 enum custom_keycodes {
     TMB_MODE = QK_KB_0, // Start custom keycodes with SAFE_RANGE to avoid conflicts
-    CL_FWD,   // Automatically assigned to the next value after TMB_MODE
-    CL_BWD,    // Automatically assigned to the next value after KC_CYCLE_LAYERS_FWD
-    KC_JOYSTICK_BUTTON     // Custom keycode for joystick button
+    CL_FWD,             // Automatically assigned to the next value after TMB_MODE
+    CL_BWD,             // Automatically assigned to the next value after KC_CYCLE_LAYERS_FWD
+    KC_JOYSTICK_BUTTON  // Custom keycode for joystick button
 };
-
 
 enum pointing_device_mode current_mode = MODE_MOUSE; // Adjusted line
 
@@ -28,7 +27,6 @@ float scroll_accumulated_h = 0;
 float scroll_accumulated_v = 0;
 
 report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
-    
     switch (current_mode) {
         case MODE_MOUSE:
             // Mouse mode doesn't modify the mouse report
@@ -65,18 +63,13 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
     return mouse_report;
 }
 
-
 // 1st layer on the cycle
 #define LAYER_CYCLE_START 0
 // Last layer on the cycle
 #define LAYER_CYCLE_END 3
 
-
-
 // Declare a static variable to keep track of the joystick button state
 static bool joystick_button_pressed = false;
-
-
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
@@ -88,12 +81,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
         case KC_JOYSTICK_BUTTON:
             if (record->event.pressed) {
-                register_code(KC_TRNS); // Register mouse button click 
+                register_code(KC_TRNS); // Register mouse button click
             } else {
                 unregister_code(KC_TRNS); // Unregister mouse button click
             }
             return false;
-
 
         case CL_FWD:
             if (record->event.pressed) {
@@ -151,39 +143,17 @@ void handle_joystick_button(void) {
     }
 }
 
-
 static int actuation = 256; // actuation point for customkeys (0-511)
-bool customkeys[4];
+bool       customkeys[4];
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-	[0] = LAYOUT(
-        TMB_MODE,   KC_KP_7,   KC_KP_8,   KC_KP_9,
-        KC_MUTE,    KC_KP_4,   KC_KP_5,   KC_KP_6,
-        RGB_TOG,    KC_KP_1,   KC_KP_2,   KC_KP_3,
-                    KC_KP_0,              KC_KP_DOT, KC_ENTER
-    ),
-	[1] = LAYOUT(
-        TMB_MODE, KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS, KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS, KC_TRNS, KC_TRNS,  KC_TRNS,
-                 KC_TRNS,           KC_TRNS, KC_TRNS 
-    ),
-	[2] = LAYOUT(
-        TMB_MODE,  KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS,  KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS, KC_TRNS, KC_TRNS,  KC_TRNS,
-                  KC_TRNS,           KC_TRNS, KC_TRNS 
-    ),
-	[3] = LAYOUT(
-        TMB_MODE, KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS, KC_TRNS, KC_TRNS,  KC_TRNS,
-        KC_TRNS, KC_TRNS, KC_TRNS,  KC_TRNS,
-                 KC_TRNS,           KC_TRNS, KC_TRNS  
-    ),
+    [0] = LAYOUT(TMB_MODE, KC_KP_7, KC_KP_8, KC_KP_9, KC_MUTE, KC_KP_4, KC_KP_5, KC_KP_6, RGB_TOG, KC_KP_1, KC_KP_2, KC_KP_3, KC_KP_0, KC_KP_DOT, KC_ENTER),
+    [1] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
+    [2] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
+    [3] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
 };
 
 void matrix_scan_user(void) {
-
     handle_joystick_button();
 
     // Execute the joystick-based actions only in MODE_CUSTOM_KEYS
@@ -194,60 +164,55 @@ void matrix_scan_user(void) {
     // Joystick-based custom keys logic continues as before
     // Up
     if (!customkeys[0] && analogReadPin(GP27) - 512 > actuation) {
-        customkeys[0] = true;
+        customkeys[0]    = true;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 1, 5);
         register_code16(keycode);
     } else if (customkeys[0] && analogReadPin(GP27) - 512 < actuation) {
-        customkeys[0] = false;
+        customkeys[0]    = false;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 1, 5);
         unregister_code16(keycode);
     }
     // Down
     if (!customkeys[1] && analogReadPin(GP27) - 512 < -actuation) {
-        customkeys[1] = true;
+        customkeys[1]    = true;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 0, 5);
         register_code16(keycode);
     } else if (customkeys[1] && analogReadPin(GP27) - 512 > -actuation) {
-        customkeys[1] = false;
+        customkeys[1]    = false;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 0, 5);
         unregister_code16(keycode);
     }
     // Left
     if (!customkeys[2] && analogReadPin(GP26) - 512 > actuation) {
-        customkeys[2] = true;
+        customkeys[2]    = true;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 3, 5);
         register_code16(keycode);
     } else if (customkeys[2] && analogReadPin(GP26) - 512 < actuation) {
-        customkeys[2] = false;
+        customkeys[2]    = false;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 3, 5);
         unregister_code16(keycode);
     }
     // Right
     if (!customkeys[3] && analogReadPin(GP26) - 512 < -actuation) {
-        customkeys[3] = true;
+        customkeys[3]    = true;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 2, 5);
         register_code16(keycode);
     } else if (customkeys[3] && analogReadPin(GP26) - 512 > -actuation) {
-        customkeys[3] = false;
+        customkeys[3]    = false;
         uint16_t keycode = dynamic_keymap_get_keycode(biton32(layer_state), 2, 5);
         unregister_code16(keycode);
     }
 }
 
-
 // Joystick config
-joystick_config_t joystick_axes[JOYSTICK_AXIS_COUNT] = {
-    [0] = JOYSTICK_AXIS_VIRTUAL,
-    [1] = JOYSTICK_AXIS_VIRTUAL
-};
-
+joystick_config_t joystick_axes[JOYSTICK_AXIS_COUNT] = {[0] = JOYSTICK_AXIS_VIRTUAL, [1] = JOYSTICK_AXIS_VIRTUAL};
 
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
-    [0] =  { ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(KC_VOLD, KC_VOLU),  ENCODER_CCW_CW(RGB_HUD, RGB_HUI)  },
-    [1] =  { ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(KC_TRNS, KC_TRNS),  ENCODER_CCW_CW(KC_TRNS, KC_TRNS)  },
-    [2] =  { ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)),  ENCODER_CCW_CW(KC_TRNS, KC_TRNS)  },
-    [3] =  { ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)),  ENCODER_CCW_CW(KC_TRNS, KC_TRNS)  },
+    [0] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(RGB_HUD, RGB_HUI)},
+    [1] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(KC_TRNS, KC_TRNS), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
+    [2] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
+    [3] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
 };
 
 #endif
