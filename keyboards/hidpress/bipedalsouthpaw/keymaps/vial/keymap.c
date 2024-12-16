@@ -1,14 +1,14 @@
-
 #include QMK_KEYBOARD_H
 #include "analog.h"
 #include "joystick.h"
 #include "bipedalsouthpaw_shared.h"
 
 enum custom_keycodes {
-    TMB_MODE = QK_KB_0, // Start custom keycodes with SAFE_RANGE to avoid conflicts
-    CL_FWD,             // Automatically assigned to the next value after TMB_MODE
-    CL_BWD,             // Automatically assigned to the next value after KC_CYCLE_LAYERS_FWD
-    KC_JOYSTICK_BUTTON  // Custom keycode for joystick button
+    TMB_MODE = QK_KB_0,
+    CL_FWD,
+    CL_BWD,
+    SCROLL_DIR,  // New keycode for toggling scroll direction
+    KC_JOYSTICK_BUTTON,
 };
 
 enum pointing_device_mode current_mode = MODE_MOUSE; // Adjusted line
@@ -25,6 +25,7 @@ bool is_joystick_button_pressed(void) {
 // Variables to store accumulated scroll values for scrolling mode
 float scroll_accumulated_h = 0;
 float scroll_accumulated_v = 0;
+bool scroll_inverted = false;  // Add this with your other global variables
 
 report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
     switch (current_mode) {
@@ -33,9 +34,9 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
             break;
 
         case MODE_SCROLLING:
-            // Implement scrolling logic here based on mouse_report.x and mouse_report.y
             scroll_accumulated_h -= (float)mouse_report.x / SCROLL_DIVISOR_H;
-            scroll_accumulated_v += (float)mouse_report.y / SCROLL_DIVISOR_V;
+            // Use scroll_inverted to determine direction
+            scroll_accumulated_v += (scroll_inverted ? -1 : 1) * (float)mouse_report.y / SCROLL_DIVISOR_V;
 
             mouse_report.h = (int8_t)scroll_accumulated_h;
             mouse_report.v = (int8_t)scroll_accumulated_v;
@@ -73,6 +74,13 @@ static bool joystick_button_pressed = false;
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
+
+        case SCROLL_DIR:
+            if (record->event.pressed) {
+                scroll_inverted = !scroll_inverted;  // Toggle scroll direction
+            }
+            return false;
+
         case TMB_MODE:
             if (record->event.pressed) {
                 current_mode = (current_mode + 1) % MODE_COUNT;
@@ -147,7 +155,7 @@ static int actuation = 256; // actuation point for customkeys (0-511)
 bool       customkeys[4];
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-    [0] = LAYOUT(TMB_MODE, KC_KP_7, KC_KP_8, KC_KP_9, KC_MUTE, KC_KP_4, KC_KP_5, KC_KP_6, RGB_TOG, KC_KP_1, KC_KP_2, KC_KP_3, KC_KP_0, KC_KP_DOT, KC_ENTER),
+    [0] = LAYOUT(TMB_MODE, KC_KP_7, KC_KP_8, KC_KP_9, KC_MUTE, KC_KP_4, KC_KP_5, KC_KP_6, RGB_TOG, KC_KP_1, KC_KP_2, KC_KP_3, KC_KP_0, KC_KP_DOT, SCROLL_DIR),
     [1] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
     [2] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
     [3] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),

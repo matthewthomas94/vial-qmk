@@ -13,6 +13,10 @@
         {"name": "Lyr Bwd",
          "title": "Cycle Layer Backward",
          "shortName": "LBwd"
+        },
+        {"name": "Scrl Dir",
+         "title": "Invert Scroll Direction",
+         "shortName": "ScrlD"
         }
     ],
     "matrix": {
