@@ -17,6 +17,21 @@
         {"name": "Scrl Dir",
          "title": "Invert Scroll Direction",
          "shortName": "ScrlD"
+        },
+        {
+            "name": "Act Up",
+            "title": "Increase Actuation Point",
+            "shortName": "Act+"
+        },
+        {
+            "name": "Act Down",
+            "title": "Decrease Actuation Point",
+            "shortName": "Act-"
+        },
+        {
+            "name": "Act Rst",
+            "title": "Reset Actuation Point",
+            "shortName": "ActR"
         }
     ],
     "matrix": {
