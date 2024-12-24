@@ -29,7 +29,7 @@ bool is_joystick_button_pressed(void) {
 float scroll_accumulated_h = 0;
 float scroll_accumulated_v = 0;
 bool scroll_inverted = false;  // Add this with your other global variables
-static int actuation = 256; // actuation point for customkeys (0-511)
+int actuation = 256; // actuation point for customkeys (0-511)
 
 report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
     switch (current_mode) {
@@ -76,26 +76,44 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
 // Declare a static variable to keep track of the joystick button state
 static bool joystick_button_pressed = false;
 
+// At the top with your other globals
+const uint16_t actuation_values[] = {352, 320, 256, 128, 64};  // Values from highest to lowest
+uint8_t current_actuation_index = 2;  // Start at center (256)
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
 
         case ACT_DOWN:
             if (record->event.pressed) {
-                // Increase by 4, but don't exceed 511
-                actuation = (actuation + 4 <= 511) ? actuation + 4 : 511;
+                if (current_actuation_index > 0) {  // Not at lowest value
+                    current_actuation_index--;
+                    actuation = actuation_values[current_actuation_index];
+                    showing_actuation = true;
+                    actuation_display_timer = timer_read32();
+                    oled_clear();
+                }
             }
             return false;
 
         case ACT_UP:
             if (record->event.pressed) {
-                // Decrease by 4, but don't go below 0
-                actuation = (actuation - 4 >= 0) ? actuation - 4 : 0;
+                if (current_actuation_index < 4) {  // Not at highest value
+                    current_actuation_index++;
+                    actuation = actuation_values[current_actuation_index];
+                    showing_actuation = true;
+                    actuation_display_timer = timer_read32();
+                    oled_clear();
+                }
             }
             return false;
 
         case ACT_RESET:
             if (record->event.pressed) {
-                actuation = 256; // Reset to default value
+                current_actuation_index = 2;  // Reset to center position
+                actuation = actuation_values[current_actuation_index];
+                showing_actuation = true;
+                actuation_display_timer = timer_read32();
+                oled_clear();
             }
             return false;
 
@@ -179,9 +197,9 @@ bool       customkeys[4];
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [0] = LAYOUT(TMB_MODE, KC_KP_7, KC_KP_8, KC_KP_9, ACT_RESET, KC_KP_4, KC_KP_5, KC_KP_6, KC_MUTE, KC_KP_1, KC_KP_2, KC_KP_3, KC_KP_0, KC_KP_DOT, SCROLL_DIR),
-    [1] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
-    [2] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
-    [3] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
+    [1] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, ACT_RESET, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
+    [2] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, ACT_RESET, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
+    [3] = LAYOUT(TMB_MODE, KC_TRNS, KC_TRNS, KC_TRNS, ACT_RESET, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
 };
 
 void matrix_scan_user(void) {
@@ -241,9 +259,9 @@ joystick_config_t joystick_axes[JOYSTICK_AXIS_COUNT] = {[0] = JOYSTICK_AXIS_VIRT
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [0] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(ACT_DOWN, ACT_UP), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
-    [1] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(KC_TRNS, KC_TRNS), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
-    [2] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
-    [3] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(G(KC_TRNS), G(KC_TRNS)), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
+    [1] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(ACT_DOWN, ACT_UP), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
+    [2] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(ACT_DOWN, ACT_UP), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
+    [3] = {ENCODER_CCW_CW(CL_BWD, CL_FWD), ENCODER_CCW_CW(ACT_DOWN, ACT_UP), ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
 };
 
 #endif

@@ -1,5 +1,13 @@
 #pragma once
 
+// Declare the variables as extern
+extern uint32_t actuation_display_timer;
+extern bool showing_actuation;
+extern int actuation;
+
+// Keep the constant define here
+#define ACTUATION_DISPLAY_DURATION 1000
+
 enum pointing_device_mode {
     MODE_MOUSE,
     MODE_SCROLLING,
