@@ -204,10 +204,26 @@ report_mouse_t azoteq_iqs5xx_get_report(report_mouse_t mouse_report) {
                     static int16_t scroll_acc_v = 0;
                     scroll_acc_h += CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.x.h, base_data.x.l));
                     scroll_acc_v += -CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.y.h, base_data.y.l));
-                    temp_report.h = scroll_acc_h / AZOTEQ_IQS5XX_SCROLL_DIVISOR;
-                    temp_report.v = scroll_acc_v / AZOTEQ_IQS5XX_SCROLL_DIVISOR;
-                    scroll_acc_h -= (int16_t)temp_report.h * AZOTEQ_IQS5XX_SCROLL_DIVISOR;
-                    scroll_acc_v -= (int16_t)temp_report.v * AZOTEQ_IQS5XX_SCROLL_DIVISOR;
+                    // Emit at most ±1 per report to prevent jumpy scrolling.
+                    // The remainder stays in the accumulator for next time.
+                    if (scroll_acc_h >= AZOTEQ_IQS5XX_SCROLL_DIVISOR) {
+                        temp_report.h = 1;
+                        scroll_acc_h -= AZOTEQ_IQS5XX_SCROLL_DIVISOR;
+                    } else if (scroll_acc_h <= -AZOTEQ_IQS5XX_SCROLL_DIVISOR) {
+                        temp_report.h = -1;
+                        scroll_acc_h += AZOTEQ_IQS5XX_SCROLL_DIVISOR;
+                    } else {
+                        temp_report.h = 0;
+                    }
+                    if (scroll_acc_v >= AZOTEQ_IQS5XX_SCROLL_DIVISOR) {
+                        temp_report.v = 1;
+                        scroll_acc_v -= AZOTEQ_IQS5XX_SCROLL_DIVISOR;
+                    } else if (scroll_acc_v <= -AZOTEQ_IQS5XX_SCROLL_DIVISOR) {
+                        temp_report.v = -1;
+                        scroll_acc_v += AZOTEQ_IQS5XX_SCROLL_DIVISOR;
+                    } else {
+                        temp_report.v = 0;
+                    }
                 }
             }
             if (base_data.number_of_fingers == 1 && !ignore_movement) {
