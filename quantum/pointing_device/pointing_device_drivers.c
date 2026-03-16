@@ -148,6 +148,8 @@ report_mouse_t azoteq_iqs5xx_get_report(report_mouse_t mouse_report) {
     report_mouse_t temp_report           = {0};
     static uint8_t previous_button_state = 0;
     static uint8_t read_error_count      = 0;
+    static int16_t scroll_acc_h          = 0;
+    static int16_t scroll_acc_v          = 0;
 
     if (azoteq_iqs5xx_init_status == I2C_STATUS_SUCCESS) {
         azoteq_iqs5xx_base_data_t base_data = {0};
@@ -192,20 +194,26 @@ report_mouse_t azoteq_iqs5xx_get_report(report_mouse_t mouse_report) {
                 }
             } else if (base_data.gesture_events_1.scroll) {
                 pd_dprintf("IQS5XX - Scroll.\n");
-                // Accumulate raw scroll deltas and emit ±1 when divisor is
-                // reached, preserving the remainder.  This avoids the lossy
-                // integer division (/ 10) that discarded sub-threshold
-                // movement and caused jerky, accelerated scrolling.
 #    ifndef AZOTEQ_IQS5XX_SCROLL_DIVISOR
 #        define AZOTEQ_IQS5XX_SCROLL_DIVISOR 10
 #    endif
+                // Max raw delta per report that can feed the accumulator.
+                // Caps noisy spikes (common with overlays) so a single
+                // reading can't queue up multiple scroll events.
+#    ifndef AZOTEQ_IQS5XX_SCROLL_MAX_DELTA
+#        define AZOTEQ_IQS5XX_SCROLL_MAX_DELTA AZOTEQ_IQS5XX_SCROLL_DIVISOR
+#    endif
                 {
-                    static int16_t scroll_acc_h = 0;
-                    static int16_t scroll_acc_v = 0;
-                    scroll_acc_h += CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.x.h, base_data.x.l));
-                    scroll_acc_v += -CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.y.h, base_data.y.l));
-                    // Emit at most ±1 per report to prevent jumpy scrolling.
-                    // The remainder stays in the accumulator for next time.
+                    int16_t dx = CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.x.h, base_data.x.l));
+                    int16_t dy = -CONSTRAIN_HID(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.y.h, base_data.y.l));
+                    // Clamp per-report input to limit noise from overlays
+                    if (dx > AZOTEQ_IQS5XX_SCROLL_MAX_DELTA) dx = AZOTEQ_IQS5XX_SCROLL_MAX_DELTA;
+                    if (dx < -AZOTEQ_IQS5XX_SCROLL_MAX_DELTA) dx = -AZOTEQ_IQS5XX_SCROLL_MAX_DELTA;
+                    if (dy > AZOTEQ_IQS5XX_SCROLL_MAX_DELTA) dy = AZOTEQ_IQS5XX_SCROLL_MAX_DELTA;
+                    if (dy < -AZOTEQ_IQS5XX_SCROLL_MAX_DELTA) dy = -AZOTEQ_IQS5XX_SCROLL_MAX_DELTA;
+                    scroll_acc_h += dx;
+                    scroll_acc_v += dy;
+                    // Emit at most ±1 per report
                     if (scroll_acc_h >= AZOTEQ_IQS5XX_SCROLL_DIVISOR) {
                         temp_report.h = 1;
                         scroll_acc_h -= AZOTEQ_IQS5XX_SCROLL_DIVISOR;
@@ -225,6 +233,11 @@ report_mouse_t azoteq_iqs5xx_get_report(report_mouse_t mouse_report) {
                         temp_report.v = 0;
                     }
                 }
+            } else {
+                // Scroll gesture ended — reset accumulators so stale
+                // remainders don't cause spurious output next time.
+                scroll_acc_h = 0;
+                scroll_acc_v = 0;
             }
             if (base_data.number_of_fingers == 1 && !ignore_movement) {
                 temp_report.x = CONSTRAIN_HID_XY(AZOTEQ_IQS5XX_COMBINE_H_L_BYTES(base_data.x.h, base_data.x.l));
