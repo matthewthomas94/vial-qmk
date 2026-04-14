@@ -14,8 +14,8 @@ typedef struct {
 
 void joystick_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     joystick_sync_t *joy = (joystick_sync_t *)out_data;
-    joy->joy_y = analogReadPin(GP28) - 512;
-    joy->joy_x = -(analogReadPin(GP29) - 512);
+    joy->joy_x = -(analogReadPin(GP28) - 512);
+    joy->joy_y = analogReadPin(GP29) - 512;
 }
 
 // --- State Sync (master → slave for OLED display) ---
@@ -482,6 +482,12 @@ void housekeeping_task_user(void) {
 // the right side is USB master. A 2s activity gate filters these.
 // Double two-finger-tap within 500ms overrides the gate.
 report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    // Trackpad is physically mounted flipped — invert both axes
+    mouse_report.x = -mouse_report.x;
+    mouse_report.y = -mouse_report.y;
+    mouse_report.h = -mouse_report.h;
+    mouse_report.v = -mouse_report.v;
+
     static uint32_t last_touch_time = 0;
     static uint32_t suppressed_btn2_time = 0;
     static bool     awaiting_double_tap = false;
