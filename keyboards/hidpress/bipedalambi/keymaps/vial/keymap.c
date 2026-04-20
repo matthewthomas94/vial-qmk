@@ -14,8 +14,8 @@ typedef struct {
 
 void joystick_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     joystick_sync_t *joy = (joystick_sync_t *)out_data;
-    joy->joy_x = -(analogReadPin(GP28) - 512);
-    joy->joy_y = analogReadPin(GP29) - 512;
+    joy->joy_y = -(analogReadPin(GP28) - 512);
+    joy->joy_x = analogReadPin(GP29) - 512;
 }
 
 // --- State Sync (master → slave for OLED display) ---
@@ -437,8 +437,8 @@ void matrix_scan_user(void) {
     // Joystick: only read ADC + process on left-as-master (direct hardware access)
     // When right is master, housekeeping_task_user polls via split transport instead
     if (is_keyboard_left() && is_keyboard_master()) {
-        int16_t joy_y = analogReadPin(GP28) - 512;
-        int16_t joy_x = -(analogReadPin(GP29) - 512);
+        int16_t joy_x = analogReadPin(GP28) - 512;
+        int16_t joy_y = -(analogReadPin(GP29) - 512);
         process_joystick(joy_x, joy_y);
     }
 }
