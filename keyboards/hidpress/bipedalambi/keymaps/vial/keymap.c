@@ -14,8 +14,8 @@ typedef struct {
 
 void joystick_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     joystick_sync_t *joy = (joystick_sync_t *)out_data;
-    joy->joy_x = analogReadPin(GP28) - 512;
-    joy->joy_y = -(analogReadPin(GP29) - 512);
+    joy->joy_y = -(analogReadPin(GP28) - 512);
+    joy->joy_x = analogReadPin(GP29) - 512;
 }
 
 // --- State Sync (master → slave for OLED display) ---
