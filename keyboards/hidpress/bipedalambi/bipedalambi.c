@@ -320,8 +320,8 @@ static void render_dissolve(uint8_t noise_level) {
 // edges, fading out over its lifetime. On release, in-flight rings finish
 // their expansion then normal rendering resumes.
 #define DRAG_NUM_RINGS          4
-#define DRAG_RING_LIFETIME_MS   900
-#define DRAG_RING_SPAWN_MS      300
+#define DRAG_RING_LIFETIME_MS   1800
+#define DRAG_RING_SPAWN_MS      600
 #define DRAG_RING_MAX_RADIUS    75
 #define DRAG_FRAME_MS           30
 
