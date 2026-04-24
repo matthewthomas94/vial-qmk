@@ -22,6 +22,7 @@ void joystick_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t
 typedef struct {
     uint8_t mode;
     uint8_t actuation_index;
+    uint8_t drag;
 } state_sync_t;
 
 // state_sync_slave_handler defined below after variable declarations
@@ -50,6 +51,7 @@ uint8_t current_actuation_index = 2;
 void state_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     const state_sync_t *state = (const state_sync_t *)in_data;
     current_mode = state->mode;
+    drag_active  = (state->drag != 0);
     if (state->actuation_index != current_actuation_index) {
         current_actuation_index = state->actuation_index;
         actuation = actuation_values[state->actuation_index];
@@ -446,15 +448,21 @@ void matrix_scan_user(void) {
 // --- Housekeeping Task (Split Transport Polling) ---
 void housekeeping_task_user(void) {
     if (is_keyboard_master()) {
-        // Sync state (current_mode) to slave for OLED display
+        // Sync state (current_mode) to slave for OLED display.
+        // Edge-triggered when drag_active flips so the slave sees brief drags
+        // that would otherwise fall between 10Hz periodic syncs.
         static uint32_t last_state_sync = 0;
-        if (timer_elapsed32(last_state_sync) > 100) {  // 10Hz — OLED doesn't need faster
+        static bool     last_drag_sent  = false;
+        bool drag_edge = (drag_active != last_drag_sent);
+        if (drag_edge || timer_elapsed32(last_state_sync) > 100) {
             state_sync_t state = {
                 .mode = current_mode,
                 .actuation_index = current_actuation_index,
+                .drag = drag_active ? 1 : 0,
             };
             transaction_rpc_send(USER_SYNC_STATE, sizeof(state), &state);
             last_state_sync = timer_read32();
+            last_drag_sent  = drag_active;
         }
 
         // When right is master, poll joystick ADC from left (slave) via split transport
@@ -538,6 +546,7 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
                 } else if (has_movement) {
                     dth_state      = DTH_DRAG_ACTIVE;
                     dth_idle_count = 0;
+                    drag_active    = true;
                     mouse_report.buttons |= MOUSE_BTN1;
                 }
                 break;
@@ -548,7 +557,8 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
                     dth_idle_count++;
                 }
                 if (dth_idle_count > DTH_RELEASE_COUNT) {
-                    dth_state = DTH_IDLE;
+                    dth_state   = DTH_IDLE;
+                    drag_active = false;
                 } else {
                     mouse_report.buttons |= MOUSE_BTN1;
                 }

@@ -5,6 +5,7 @@ enum pointing_device_mode current_mode = MODE_CUSTOM_KEYS;
 int actuation = 256;
 uint32_t actuation_display_timer = 0;
 bool showing_actuation = false;
+bool drag_active = false;
 
 #ifdef OLED_ENABLE
 #include "i2c_master.h"
@@ -313,6 +314,64 @@ static void render_dissolve(uint8_t noise_level) {
     }
 }
 
+// --- Drag sonar ping ---
+// While drag_active is true, a new ring is emitted from the OLED center every
+// DRAG_RING_SPAWN_MS. Each ring expands at constant speed past the screen
+// edges, fading out over its lifetime. On release, in-flight rings finish
+// their expansion then normal rendering resumes.
+#define DRAG_NUM_RINGS          4
+#define DRAG_RING_LIFETIME_MS   1800
+#define DRAG_RING_SPAWN_MS      600
+#define DRAG_RING_MAX_RADIUS    75
+#define DRAG_FRAME_MS           30
+
+static uint32_t drag_ring_spawn[DRAG_NUM_RINGS] = {0};
+static uint8_t  drag_ring_slot   = 0;
+static uint32_t drag_last_spawn  = 0;
+static uint32_t drag_last_frame  = 0;
+static bool     drag_prev        = false;
+static bool     drag_ui_rendered = false;
+
+static inline void drag_plot(int16_t x, int16_t y) {
+    if ((uint16_t)x < 128 && (uint16_t)y < 32) {
+        oled_write_pixel((uint8_t)x, (uint8_t)y, true);
+    }
+}
+
+static void draw_ring_dissipating(int16_t cx, int16_t cy, int16_t r, uint8_t alive_pct) {
+    if (r <= 0) return;
+    int16_t x   = r;
+    int16_t y   = 0;
+    int16_t err = 1 - r;
+    while (x >= y) {
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx + x, cy + y);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx + y, cy + x);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx - y, cy + x);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx - x, cy + y);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx - x, cy - y);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx - y, cy - x);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx + y, cy - x);
+        if ((fast_rand() % 100) < alive_pct) drag_plot(cx + x, cy - y);
+        y++;
+        if (err <= 0) {
+            err += 2 * y + 1;
+        } else {
+            x--;
+            err += 2 * (y - x) + 1;
+        }
+    }
+}
+
+static bool drag_has_live_rings(void) {
+    for (uint8_t i = 0; i < DRAG_NUM_RINGS; i++) {
+        if (drag_ring_spawn[i] != 0 &&
+            timer_elapsed32(drag_ring_spawn[i]) < DRAG_RING_LIFETIME_MS) {
+            return true;
+        }
+    }
+    return false;
+}
+
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
     oled_startup_timer = timer_read32();
     oled_startup_complete = false;
@@ -380,6 +439,52 @@ bool oled_task_user(void) {
     // (process_record_user only runs on master, so slave OLED needs this)
     if ((screensaver_active || screen_is_off) && last_input_activity_elapsed() < 1000) {
         register_oled_activity();
+    }
+
+    // Drag sonar ping — takes precedence over screensaver and layer-4 freeze.
+    // Keeps rendering after drag_active drops until in-flight rings fade out.
+    bool drag_ui_active = drag_active || drag_has_live_rings();
+    if (drag_ui_active) {
+        if (screen_is_off) { screen_is_off = false; oled_on(); }
+        if (screensaver_active) { screensaver_active = false; warp_initialized = false; }
+        last_activity_time = timer_read32();
+
+        if (drag_active && !drag_prev) {
+            for (uint8_t i = 0; i < DRAG_NUM_RINGS; i++) drag_ring_spawn[i] = 0;
+            drag_ring_slot  = 0;
+            drag_last_spawn = 0;
+        }
+        drag_prev = drag_active;
+
+        if (timer_elapsed32(drag_last_frame) >= DRAG_FRAME_MS) {
+            drag_last_frame = timer_read32();
+
+            if (drag_active && (drag_last_spawn == 0 ||
+                timer_elapsed32(drag_last_spawn) >= DRAG_RING_SPAWN_MS)) {
+                drag_ring_spawn[drag_ring_slot] = timer_read32();
+                drag_ring_slot = (drag_ring_slot + 1) % DRAG_NUM_RINGS;
+                drag_last_spawn = timer_read32();
+            }
+
+            oled_clear();
+            for (uint8_t i = 0; i < DRAG_NUM_RINGS; i++) {
+                if (drag_ring_spawn[i] == 0) continue;
+                uint32_t age = timer_elapsed32(drag_ring_spawn[i]);
+                if (age >= DRAG_RING_LIFETIME_MS) { drag_ring_spawn[i] = 0; continue; }
+                int16_t r = (int16_t)((age * DRAG_RING_MAX_RADIUS) / DRAG_RING_LIFETIME_MS);
+                uint8_t alive = 100 - (uint8_t)((age * 100) / DRAG_RING_LIFETIME_MS);
+                draw_ring_dissipating(SCREEN_CENTER_X, SCREEN_CENTER_Y, r, alive);
+            }
+        }
+        drag_ui_rendered = true;
+        return false;
+    }
+    drag_prev = drag_active;
+
+    // Drag just ended and rings are gone — wipe leftover pixels before normal render
+    if (drag_ui_rendered) {
+        oled_clear();
+        drag_ui_rendered = false;
     }
 
     if (!screensaver_active && timer_elapsed32(last_activity_time) > SCREENSAVER_TIMEOUT) {

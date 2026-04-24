@@ -15,6 +15,7 @@ extern enum pointing_device_mode current_mode;
 extern int actuation;
 extern bool showing_actuation;
 extern uint32_t actuation_display_timer;
+extern bool drag_active;
 
 void register_oled_activity(void);
 
