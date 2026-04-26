@@ -448,13 +448,9 @@ void matrix_scan_user(void) {
 // --- Housekeeping Task (Split Transport Polling) ---
 void housekeeping_task_user(void) {
     if (is_keyboard_master()) {
-        // Sync state (current_mode) to slave for OLED display.
-        // Edge-triggered when drag_active flips so the slave sees brief drags
-        // that would otherwise fall between 10Hz periodic syncs.
+        // Sync state (current_mode) to slave for OLED display
         static uint32_t last_state_sync = 0;
-        static bool     last_drag_sent  = false;
-        bool drag_edge = (drag_active != last_drag_sent);
-        if (drag_edge || timer_elapsed32(last_state_sync) > 100) {
+        if (timer_elapsed32(last_state_sync) > 100) {  // 10Hz — OLED doesn't need faster
             state_sync_t state = {
                 .mode = current_mode,
                 .actuation_index = current_actuation_index,
@@ -462,7 +458,6 @@ void housekeeping_task_user(void) {
             };
             transaction_rpc_send(USER_SYNC_STATE, sizeof(state), &state);
             last_state_sync = timer_read32();
-            last_drag_sent  = drag_active;
         }
 
         // When right is master, poll joystick ADC from left (slave) via split transport
