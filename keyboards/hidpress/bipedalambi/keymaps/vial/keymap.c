@@ -534,6 +534,13 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
                     dth_state    = DTH_TAP_SEEN;
                     dth_tap_time = timer_read32();
                 }
+                // Hardware press-and-hold drag: BTN1 held > 150ms with movement.
+                // Catches single-tap-and-hold drags that bypass the DTH double-tap path.
+                else if (hw_btn1 && has_movement && timer_elapsed32(dth_btn1_start) > 150) {
+                    dth_state      = DTH_DRAG_ACTIVE;
+                    dth_idle_count = 0;
+                    drag_active    = true;
+                }
                 break;
             case DTH_TAP_SEEN:
                 if (timer_elapsed32(dth_tap_time) > DTH_TAP_WINDOW_MS) {
