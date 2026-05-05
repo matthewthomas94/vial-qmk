@@ -1,14 +1,14 @@
-name: Build Bipedalambi Firmware
+name: Build Skeletalambi Firmware
 
 on:
   push:
     paths:
-      - 'keyboards/hidpress/bipedalambi/**'
-      - '.github/workflows/build_bipedalambi.yml'
+      - 'keyboards/hidpress/skeletalambi/**'
+      - '.github/workflows/build_skeletalambi.yml'
   pull_request:
     paths:
-      - 'keyboards/hidpress/bipedalambi/**'
-      - '.github/workflows/build_bipedalambi.yml'
+      - 'keyboards/hidpress/skeletalambi/**'
+      - '.github/workflows/build_skeletalambi.yml'
   workflow_dispatch:
 
 concurrency:
@@ -42,12 +42,12 @@ jobs:
       - name: Build firmware
         run: |
           git config --global --add safe.directory $(pwd)
-          make hidpress/bipedalambi:vial ${{ matrix.make_args }} -j $(nproc)
+          make hidpress/skeletalambi:vial ${{ matrix.make_args }} -j $(nproc)
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bipedalambi-vial-${{ matrix.side }}
+          name: skeletalambi-vial-${{ matrix.side }}
           path: |
             *.uf2
           if-no-files-found: error

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Bipedal Ambi is a split keyboard with two independent RP2040 microcontrollers. Each half has its own EEPROM (4096 bytes of wear-leveled flash storage). **Clearing EEPROM on one half does NOT affect the other half.** Both halves must be cleared separately if a full reset is needed.
+The Skeletal Ambi is a split keyboard with two independent RP2040 microcontrollers. Each half has its own EEPROM (4096 bytes of wear-leveled flash storage). **Clearing EEPROM on one half does NOT affect the other half.** Both halves must be cleared separately if a full reset is needed.
 
 EEPROM stores:
 - **Vial dynamic keymap** (layer keycodes customized in Vial)

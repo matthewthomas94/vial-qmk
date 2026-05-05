@@ -1,4 +1,4 @@
-#include "bipedalambi.h"
+#include "skeletalambi.h"
 
 // Global variables (used by keymap regardless of OLED)
 enum pointing_device_mode current_mode = MODE_CUSTOM_KEYS;
