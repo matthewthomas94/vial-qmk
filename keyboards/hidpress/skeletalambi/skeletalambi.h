@@ -21,7 +21,7 @@ void register_oled_activity(void);
 
 // Unified layout macro for both halves (54 keys)
 // Left keys (L_) → rows 0-3, Right keys (R_) → rows 4-7
-#define LAYOUT_bipedalambi( \
+#define LAYOUT_skeletalambi( \
     L03, L02, L04, L00, L01, L05, \
     L13, L12, L14, L10, L11, L15, L07, \
     L23, L22, L24, L20, L21, L25, L26, L27, L36, L37, \

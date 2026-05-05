@@ -52,7 +52,7 @@
 // OLED
 #define OLED_DISPLAY_128X32
 #define OLED_TIMEOUT 0
-#define OLED_FONT_H "keyboards/hidpress/bipedalambi/glcdfont.c"
+#define OLED_FONT_H "keyboards/hidpress/skeletalambi/glcdfont.c"
 
 // I2C — left uses I2C0 (GP12/GP13), right uses I2C1 (GP18/GP19)
 #ifdef RIGHT_SIDE

@@ -1,9 +1,9 @@
 #include QMK_KEYBOARD_H
-#include "bipedalambi.h"
+#include "skeletalambi.h"
 
-// Simple default keymap using the 29-key LAYOUT_bipedalambi macro
+// Simple default keymap using the 29-key LAYOUT_skeletalambi macro
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-    [0] = LAYOUT_bipedalambi(
+    [0] = LAYOUT_skeletalambi(
         KC_ESC,                       // k03 - Top center
         KC_1, KC_2,                   // k02, k04
         KC_Q, KC_W, KC_E,             // k00, k01, k05
@@ -17,19 +17,19 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_Y, KC_H,                   // k32, k34
         KC_N, KC_ENT, KC_NO           // k31, k35, k17
     ),
-    [1] = LAYOUT_bipedalambi(
+    [1] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
     ),
-    [2] = LAYOUT_bipedalambi(
+    [2] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
     ),
-    [3] = LAYOUT_bipedalambi(
+    [3] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,

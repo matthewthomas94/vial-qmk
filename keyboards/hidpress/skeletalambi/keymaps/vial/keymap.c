@@ -1,5 +1,5 @@
 #include QMK_KEYBOARD_H
-#include "bipedalambi.h"
+#include "skeletalambi.h"
 #include "analog.h"
 #include "dynamic_keymap.h"
 #include "transactions.h"
@@ -125,7 +125,7 @@ void pointing_device_init_user(void) {
 // --- Keymap Definition ---
 // Unified 54-key layout: Left (29 keys) + Right (25 keys)
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-    [0] = LAYOUT_bipedalambi(
+    [0] = LAYOUT_skeletalambi(
         /* Left */
         KC_E,    KC_W,    KC_R,    KC_ESC,  KC_Q,    KC_T,
         KC_D,    KC_S,    KC_F,    KC_TAB,  KC_A,    KC_G,    KC_UP,
@@ -137,7 +137,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_COMM, KC_M,    KC_DOT,  KC_SPC,  KC_N,    KC_SLSH, KC_RSFT,
         ENC_MOD, RCTL(KC_UP), KC_RALT, KC_RCTL, MO(1), KC_EQL
     ),
-    [1] = LAYOUT_bipedalambi(
+    [1] = LAYOUT_skeletalambi(
         /* Left */
         KC_3,    KC_2,    KC_4,    KC_GRV,  KC_1,    KC_5,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_UP,
@@ -149,7 +149,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LBRC, KC_TRNS, KC_RBRC, KC_TRNS, KC_TRNS, KC_BSLS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, ACT_UP
     ),
-    [2] = LAYOUT_bipedalambi(
+    [2] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
@@ -159,7 +159,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
     ),
-    [3] = LAYOUT_bipedalambi(
+    [3] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
@@ -169,7 +169,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
     ),
-    [4] = LAYOUT_bipedalambi(
+    [4] = LAYOUT_skeletalambi(
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
