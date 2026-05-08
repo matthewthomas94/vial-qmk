@@ -506,9 +506,9 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
 
     // Scroll inversion and sensitivity handled at driver level in pointing_device_drivers.c
 
-    // Double-tap-hold: tap, then touch again within window → immediate BUTTON1.
+    // Double-tap-hold: tap, then touch again within 100ms → immediate BUTTON1.
     // This is the only path that activates drag — single press-and-hold no longer drags.
-    #define DTH_TAP_WINDOW_MS  300   // Max ms between tap and second contact
+    #define DTH_TAP_WINDOW_MS  100   // Max ms between tap and second contact
     #define DTH_RELEASE_COUNT  10    // Idle reports before releasing drag (~100ms)
     #define DTH_IDLE           0
     #define DTH_TAP_SEEN       1
