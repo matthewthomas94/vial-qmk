@@ -506,8 +506,9 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
 
     // Scroll inversion and sensitivity handled at driver level in pointing_device_drivers.c
 
-    // Double-tap-hold: tap, then touch again within 100ms → immediate BUTTON1.
-    // This is the only path that activates drag — single press-and-hold no longer drags.
+    // Drag engages via either:
+    //   - double-tap-then-hold (tap, then re-contact within 100ms and move), or
+    //   - single press-and-hold (BTN1 held > 150ms with movement).
     #define DTH_TAP_WINDOW_MS  100   // Max ms between tap and second contact
     #define DTH_RELEASE_COUNT  10    // Idle reports before releasing drag (~100ms)
     #define DTH_IDLE           0
@@ -533,6 +534,12 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
                 if (dth_prev_btn1 && !hw_btn1 && timer_elapsed32(dth_btn1_start) < 50) {
                     dth_state    = DTH_TAP_SEEN;
                     dth_tap_time = timer_read32();
+                }
+                // Hardware press-and-hold drag: BTN1 held > 150ms with movement.
+                else if (hw_btn1 && has_movement && timer_elapsed32(dth_btn1_start) > 150) {
+                    dth_state      = DTH_DRAG_ACTIVE;
+                    dth_idle_count = 0;
+                    drag_active    = true;
                 }
                 break;
             case DTH_TAP_SEEN:
