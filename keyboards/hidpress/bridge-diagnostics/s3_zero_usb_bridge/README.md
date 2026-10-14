@@ -47,6 +47,7 @@ Once armed, USB serial disappears because the USB PHY is now used for host.
 | Amber | Host armed, waiting for both supported USB interfaces |
 | Cyan | USB interfaces opened, BLE not fully authenticated/subscribed |
 | Green | USB interfaces opened and all three BLE reports subscribed |
+| Flashing magenta | Pairing mode, waiting for a new host |
 | Red | USB setup, transfer, or queue error; forwarding stopped |
 
 Green indicates readiness, not proof of end-to-end input delivery.
@@ -63,6 +64,16 @@ before pairing this firmware: the same radio address now has a different
 HID descriptor. Pair through macOS Bluetooth settings. No automatic test
 keystrokes are generated. The battery percentage is a fixed placeholder,
 not a measurement. PnP uses an unassigned prototype VID, not a production ID.
+
+## Pairing A New Host
+
+The bridge holds one BLE connection at a time and advertises whenever it is
+free. To pair another computer while one is connected, hold BOOT for five
+seconds (after boot, never during reset). The LED flashes magenta, the
+current host is dropped and, for 60 seconds, hosts that were already paired
+are refused. Pair the new host from its Bluetooth settings; the first new
+host to pair ends pairing mode. Earlier pairings are kept, so a previous host
+reconnects later whenever the bridge is free.
 
 ## Supported Inputs
 
