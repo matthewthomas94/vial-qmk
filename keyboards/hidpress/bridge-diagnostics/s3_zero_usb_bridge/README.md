@@ -70,10 +70,10 @@ not a measurement. PnP uses an unassigned prototype VID, not a production ID.
 The bridge holds one BLE connection at a time and advertises whenever it is
 free. To pair another computer while one is connected, hold BOOT for five
 seconds (after boot, never during reset). The LED flashes magenta, the
-current host is dropped and, for 60 seconds, hosts that were already paired
-are refused. Pair the new host from its Bluetooth settings; the first new
-host to pair ends pairing mode. Earlier pairings are kept, so a previous host
-reconnects later whenever the bridge is free.
+current host is dropped and refused for 60 seconds, so it cannot take the
+connection back. Pair (or re-pair) the other host from its Bluetooth
+settings; the flashing stops once it connects. All pairings are kept, so the
+dropped host reconnects later whenever the bridge is free.
 
 ## Supported Inputs
 

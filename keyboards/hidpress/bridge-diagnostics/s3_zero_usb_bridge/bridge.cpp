@@ -16,12 +16,13 @@ constexpr uint8_t bootPin = 0;
 Adafruit_NeoPixel led(1, 21, NEO_RGB + NEO_KHZ800);
 std::atomic<bool> connected{false}, authenticated{false}, failed{false};
 std::atomic<bool> advertiseAgain{false};
-// Pairing mode: drop the current host and refuse already-bonded hosts until a new one pairs.
-std::atomic<bool> pairing{false}, rejectHost{false};
+// Pairing mode: drop the current host and refuse only that host for the window,
+// so another host (new or re-pairing) can take the single connection.
+std::atomic<bool> pairing{false}, newHostPaired{false}, rejectHost{false};
 uint32_t pairingSince = 0;
 constexpr uint32_t pairingHoldMs = 5000, pairingWindowMs = 60000;
-esp_ble_bond_dev_t knownBonds[15];
-int knownBondCount = 0;
+esp_bd_addr_t currentPeer = {}, kickedPeer = {};
+bool haveKickedPeer = false;
 BLEServer *bleServer = nullptr;
 std::atomic<uint16_t> connId{0};
 BLECharacteristic *inputs[3] = {};
@@ -76,25 +77,24 @@ class SecurityCallbacks : public BLESecurityCallbacks {
   bool onSecurityRequest() override { return true; }
   bool onConfirmPIN(uint32_t) override { return false; }
   void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
-    if (result.success && pairing) {
-      for (int i = 0; i < knownBondCount; ++i) {
-        if (memcmp(knownBonds[i].bd_addr, result.bd_addr, sizeof(esp_bd_addr_t)) == 0) {
-          rejectHost = true;  // A previously paired host; keep the slot free for a new one.
-          return;
-        }
-      }
-      pairing = false;
+    if (result.success && pairing && haveKickedPeer &&
+        memcmp(kickedPeer, result.bd_addr, sizeof(esp_bd_addr_t)) == 0) {
+      rejectHost = true;  // The host we dropped; keep the slot free for another one.
+      return;
+    }
+    if (result.success) {
+      memcpy(currentPeer, result.bd_addr, sizeof(esp_bd_addr_t));
+      if (pairing) newHostPaired = true;
     }
     authenticated = result.success;
   }
 };
 
 void startPairing() {
-  knownBondCount = esp_ble_get_bond_device_num();
-  if (knownBondCount < 0) knownBondCount = 0;
-  if (knownBondCount > 15) knownBondCount = 15;
-  if (esp_ble_get_bond_device_list(&knownBondCount, knownBonds) != ESP_OK) knownBondCount = 0;
+  haveKickedPeer = connected && authenticated;
+  if (haveKickedPeer) memcpy(kickedPeer, currentPeer, sizeof(esp_bd_addr_t));
   pairingSince = millis();
+  newHostPaired = false;
   pairing = true;
   if (connected) {
     releaseAll();
@@ -259,7 +259,7 @@ void processEvent(const UsbEvent &event) {
 void updateLed() {
   uint32_t color;
   if (failed) color = led.Color(32, 0, 0);
-  else if (pairing) color = (millis() / 250) % 2 ? led.Color(24, 0, 24) : 0;
+  else if (pairing && !newHostPaired) color = (millis() / 250) % 2 ? led.Color(24, 0, 24) : 0;
   else if (!hostStarted) color = led.Color(0, 0, 24);
   else if (!opened[0] || !opened[1]) color = led.Color(28, 10, 0);
   else if (ready[0] && ready[1] && ready[2]) color = led.Color(0, 24, 0);
