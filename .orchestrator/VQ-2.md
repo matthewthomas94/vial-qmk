@@ -74,4 +74,5 @@ host), and the power/USB-role guards in `startHost()`.
 
 ## Required inputs
 
-- [ ] Integration base: the slot firmware exists only on branch `claude/hidpress-s3-bluetooth-bridge-eb0170` (worktree `.claude/worktrees/vibrant-bhaskara-8f595f`, head `d93f103599`), not on `vial`. Decide whether to fast-forward `vial` to that branch before dispatch. The main checkout's untracked, older `keyboards/hidpress/bridge-diagnostics/` copy (holding private git-ignored `backups/` flash images and `logs/`) blocks the fast-forward and must be preserved or moved first, not deleted.
+- [x] Integration base: the slot firmware exists only on branch `claude/hidpress-s3-bluetooth-bridge-eb0170` (worktree `.claude/worktrees/vibrant-bhaskara-8f595f`, head `d93f103599`), not on `vial`. Decide whether to fast-forward `vial` to that branch before dispatch. The main checkout's untracked, older `keyboards/hidpress/bridge-diagnostics/` copy (holding private git-ignored `backups/` flash images and `logs/`) blocks the fast-forward and must be preserved or moved first, not deleted.
+  - Resolved 2026-10-17: user approved merging the branch into `vial` (merge commit `a0d252ad62`; a fast-forward was no longer possible). The git-ignored `backups/`, `logs/` and `build/` folders were kept in place under `keyboards/hidpress/bridge-diagnostics/`. Work from `vial`.
