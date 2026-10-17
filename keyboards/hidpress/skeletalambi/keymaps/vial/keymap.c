@@ -192,25 +192,29 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 };
 
+// The S3 bridge catches reserved consumer usage 0x0010 + slot and switches to
+// BLE host slot 1-3; a computer on direct USB ignores it.
+static void process_bt_step(bool next, bool pressed) {
+    if (pressed) {
+        bt_slot = next ? bt_slot % 3 + 1 : (bt_slot + 1) % 3 + 1;
+        host_consumer_send(0x0010 + bt_slot);
+        showing_bt = true;
+        bt_display_timer = timer_read32();
+#ifdef OLED_ENABLE
+        oled_clear();
+#endif
+    } else {
+        host_consumer_send(0);
+    }
+}
+
 // --- Process Record User ---
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     register_oled_activity();
 
-    // Intercept encoder rotation when ENC_MOD is held → layer cycling
-    if (enc_mod_held && IS_ENCODEREVENT(record->event) && record->event.pressed) {
-        bool clockwise = (record->event.type == ENCODER_CW_EVENT);
-        uint8_t current_layer = get_highest_layer(layer_state);
-        if (current_layer >= LAYER_CYCLE_START && current_layer <= LAYER_CYCLE_END) {
-            if (clockwise) {
-                uint8_t next_layer = current_layer + 1;
-                if (next_layer > LAYER_CYCLE_END) next_layer = LAYER_CYCLE_START;
-                layer_move(next_layer);
-            } else {
-                int8_t prev_layer = current_layer - 1;
-                if (prev_layer < LAYER_CYCLE_START) prev_layer = LAYER_CYCLE_END;
-                layer_move(prev_layer);
-            }
-        }
+    // Intercept encoder rotation when ENC_MOD is held → BT host slot switching
+    if (enc_mod_held && IS_ENCODEREVENT(record->event)) {
+        process_bt_step(record->event.type == ENCODER_CW_EVENT, record->event.pressed);
         return false;  // suppress the encoder map keycode
     }
 
@@ -299,21 +303,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             enc_mod_held = record->event.pressed;
             return false;
 
-        // The S3 bridge catches reserved consumer usage 0x0010 + slot and
-        // switches to BLE host slot 1-3; a computer on direct USB ignores it.
         case BT_PREV:
         case BT_NEXT:
-            if (record->event.pressed) {
-                bt_slot = keycode == BT_NEXT ? bt_slot % 3 + 1 : (bt_slot + 1) % 3 + 1;
-                host_consumer_send(0x0010 + bt_slot);
-                showing_bt = true;
-                bt_display_timer = timer_read32();
-#ifdef OLED_ENABLE
-                oled_clear();
-#endif
-            } else {
-                host_consumer_send(0);
-            }
+            process_bt_step(keycode == BT_NEXT, record->event.pressed);
             return false;
     }
     return true;
@@ -638,7 +630,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 // --- Encoder Map ---
 // Base rotation is Vial-remappable (default: volume). When ENC_MOD is held,
-// process_record_user intercepts encoder events to cycle layers instead.
+// process_record_user intercepts encoder events to switch BT host slot instead.
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [0] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },

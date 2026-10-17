@@ -3,7 +3,7 @@
     "lighting": "qmk_backlight",
     "customKeycodes": [
         {"name": "Thmbstk",
-         "title": "Cycle Thumbstick Mode",
+         "title": "Tap: cycle thumbstick mode. Hold + turn encoder 1: BT host slot",
          "shortName": "Thmb"
         },
         {"name": "Lyr Fwd",

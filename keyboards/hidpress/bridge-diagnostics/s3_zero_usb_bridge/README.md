@@ -69,12 +69,14 @@ not a measurement. PnP uses an unassigned prototype VID, not a production ID.
 ## Host Slots
 
 The bridge remembers three hosts, one per slot, and holds one BLE
-connection at a time. Southpaw and Ambi Vial keymaps provide `BT Prev` and
-`BT Next` custom keycodes (assign them to an encoder's two directions in
-Vial). Each press steps the keyboard's slot 1 > 2 > 3 (wrapping), shows
-`BT` / `0N` on the OLED for a second, and sends reserved consumer usage
-0x0010 + slot (0x0011-0x0013). The bridge consumes it and does not forward
-it; a computer on direct USB ignores it.
+connection at a time. Pick a slot on the keyboard by holding the encoder's
+push and turning it: `Enc Mod` on the Ambi, encoder 1's `Thmbstk` push on
+the Southpaw (tapping it still changes thumbstick mode). Vial also offers
+`BT Prev` / `BT Next` custom keycodes for any key or encoder direction.
+Each step moves the slot 1 > 2 > 3 (wrapping), shows `BT` / `0N` on the
+OLED for a second, and sends reserved consumer usage 0x0010 + slot
+(0x0011-0x0013). The bridge consumes it and does not forward it; a
+computer on direct USB ignores it.
 
 - Slot with a host: the current host is dropped and the LED flashes white
   while only that slot's host may connect. After 15 seconds without it
