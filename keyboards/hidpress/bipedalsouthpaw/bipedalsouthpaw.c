@@ -207,29 +207,28 @@ uint8_t bt_slot = 1;
 uint32_t bt_display_timer = 0;
 bool showing_bt = false;
 
-// The OLED font has no letters, so draw "BT" over "0N" with a 5x7 font at 2x.
-static const uint8_t bt_glyphs[][7] = {
-    {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}, // B
-    {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}, // T
-    {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}, // 0
-    {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}, // 1
-    {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}, // 2
-    {0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E}, // 3
+// Same layout as the actuation screen: the big digit glyphs from glcdfont
+// (1 = 0x3E, 2 = 0x3C, 3 = 0x3A), with "BT" drawn in the label slot since
+// the font has no B. The panel is mounted rotated: viewed (vx, vy) is raw
+// pixel (127 - vy, vx).
+static const uint8_t bt_label[2][6] = {
+    {0x1E, 0x11, 0x1E, 0x11, 0x11, 0x1E}, // B
+    {0x1F, 0x04, 0x08, 0x08, 0x08, 0x08}, // T
 };
 
-static void draw_bt_glyph(uint8_t glyph, uint8_t x, uint8_t y) {
-    for (uint8_t row = 0; row < 14; row++) {
-        for (uint8_t col = 0; col < 10; col++) {
-            if (bt_glyphs[glyph][row / 2] & (0x10 >> (col / 2))) oled_write_pixel(x + col, y + row, true);
+void render_bt_state(void) {
+    uint8_t digit = 0x3E - 2 * (bt_slot - 1);
+    for (uint8_t line = 0; line < 3; line++) {
+        oled_set_cursor(9, line);
+        oled_write_char(digit + 0x20 * line, false);
+        oled_write_char(digit + 1 + 0x20 * line, false);
+    }
+    for (uint8_t row = 0; row < 6; row++) {
+        for (uint8_t col = 0; col < 5; col++) {
+            if (bt_label[0][row] & (0x10 >> col)) oled_write_pixel(77 - row, 6 + col, true);
+            if (bt_label[1][row] & (0x10 >> col)) oled_write_pixel(77 - row, 13 + col, true);
         }
     }
-}
-
-void render_bt_state(void) {
-    draw_bt_glyph(0, 53, 1);
-    draw_bt_glyph(1, 65, 1);
-    draw_bt_glyph(2, 53, 17);
-    draw_bt_glyph(2 + bt_slot, 65, 17);
 }
 
 void render_actuation_state(void) {

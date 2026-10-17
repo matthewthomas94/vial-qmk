@@ -73,7 +73,7 @@ connection at a time. Pick a slot on the keyboard by holding the encoder's
 push and turning it: `Enc Mod` on the Ambi, encoder 1's `Thmbstk` push on
 the Southpaw (tapping it still changes thumbstick mode). Vial also offers
 `BT Prev` / `BT Next` custom keycodes for any key or encoder direction.
-Each step moves the slot 1 > 2 > 3 (wrapping), shows `BT` / `0N` on the
+Each step moves the slot 1 > 2 > 3 (wrapping), shows `BT` and the slot on the
 OLED for a second, and sends reserved consumer usage 0x0010 + slot
 (0x0011-0x0013). The bridge consumes it and does not forward it; a
 computer on direct USB ignores it.
