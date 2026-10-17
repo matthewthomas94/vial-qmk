@@ -48,7 +48,7 @@ Once armed, USB serial disappears because the USB PHY is now used for host.
 | Cyan | USB interfaces opened, BLE not fully authenticated/subscribed |
 | Green | USB interfaces opened and all three BLE reports subscribed |
 | Flashing magenta | Pairing mode, waiting for a new host |
-| Flashing white | Switching to another paired host |
+| Flashing white | Switching to another host slot |
 | Red | USB setup, transfer, or queue error; forwarding stopped |
 
 Green indicates readiness, not proof of end-to-end input delivery.
@@ -66,26 +66,32 @@ HID descriptor. Pair through macOS Bluetooth settings. No automatic test
 keystrokes are generated. The battery percentage is a fixed placeholder,
 not a measurement. PnP uses an unassigned prototype VID, not a production ID.
 
-## Pairing A New Host
+## Host Slots
 
-The bridge holds one BLE connection at a time and advertises whenever it is
-free. To pair another computer while one is connected, hold BOOT for five
-seconds (after boot, never during reset). The LED flashes magenta, the
-current host is dropped and refused for 60 seconds, so it cannot take the
-connection back. Pair (or re-pair) the other host from its Bluetooth
-settings; the flashing stops once it connects. All pairings are kept, so the
-dropped host reconnects later whenever the bridge is free.
+The bridge remembers three hosts, one per slot, and holds one BLE
+connection at a time. Southpaw and Ambi Vial keymaps provide `BT Prev` and
+`BT Next` custom keycodes (assign them to an encoder's two directions in
+Vial). Each press steps the keyboard's slot 1 > 2 > 3 (wrapping), shows
+`BT` / `0N` on the OLED for a second, and sends reserved consumer usage
+0x0010 + slot (0x0011-0x0013). The bridge consumes it and does not forward
+it; a computer on direct USB ignores it.
 
-## Switching Hosts
+- Slot with a host: the current host is dropped and the LED flashes white
+  while only that slot's host may connect. After 15 seconds without it
+  connecting, any slotted host is accepted again.
+- Empty slot: the bridge enters pairing mode for that slot (below).
+- Hold BOOT 5 s (after boot, never during reset): forget the selected
+  slot's host and pair a new one into it.
 
-Southpaw and Ambi Vial keymaps provide `BT Prev` and `BT Next` custom
-keycodes (assign them to an encoder's two directions in Vial). They send
-reserved consumer usages 0x0010 / 0x0011, which the bridge consumes and
-does not forward; a computer on direct USB ignores them. Each press steps
-through the bonded hosts (sorted by address), drops the current one and
-flashes white while only the selected host may connect. Further presses keep
-stepping from the selected host. After 15 seconds without it connecting, any
-paired host is accepted again. With fewer than two pairings it does nothing.
+Pairing mode flashes magenta for up to 60 seconds. The current host is
+dropped and hosts in other slots are refused; pair the new computer from
+its Bluetooth settings and it takes the slot. A forgotten host must remove
+the old `Hidpress S3 Bridge` pairing on its side before pairing again.
+
+The keyboard's slot counter starts at 01 on power-up and is not told which
+host the bridge reconnected to, so the OLED number may not match until the
+dial is turned. Bonds made before slots existed fill empty slots in the
+order they connect; a fourth host is refused and its bond removed.
 
 ## Supported Inputs
 

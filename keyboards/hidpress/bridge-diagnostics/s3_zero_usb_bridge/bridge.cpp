@@ -5,7 +5,7 @@
 #include <BLE2902.h>
 #include <BLESecurity.h>
 #include <HWCDC.h>
-#include <algorithm>
+#include <Preferences.h>
 #include <atomic>
 #include "usb/usb_host.h"
 #include <UsbHostHid.h>
@@ -17,20 +17,29 @@ constexpr uint8_t bootPin = 0;
 Adafruit_NeoPixel led(1, 21, NEO_RGB + NEO_KHZ800);
 std::atomic<bool> connected{false}, authenticated{false}, failed{false};
 std::atomic<bool> advertiseAgain{false};
-// Pairing mode: drop the current host and refuse only that host for the window,
-// so another host (new or re-pairing) can take the single connection.
+// Three host slots, saved in flash. The keyboard's BT_PREV/BT_NEXT keys send
+// reserved consumer usage 0x0011 + slot to pick one.
+constexpr int slotCount = 3;
+constexpr uint16_t slotUsageBase = 0x0011;
+esp_bd_addr_t slots[slotCount] = {};
+bool slotUsed[slotCount] = {};
+std::atomic<int> selected{0};
+std::atomic<bool> slotsDirty{false};
+Preferences prefs;
+// Pairing mode: the selected slot is emptied and only a host in no slot may
+// connect; it takes the selected slot.
 std::atomic<bool> pairing{false}, newHostPaired{false}, rejectHost{false};
 uint32_t pairingSince = 0;
 constexpr uint32_t pairingHoldMs = 5000, pairingWindowMs = 60000;
-esp_bd_addr_t currentPeer = {}, kickedPeer = {};
-bool haveKickedPeer = false;
-// Host switching: BT_PREV/BT_NEXT on the keyboard send these reserved consumer
-// usages. Only the chosen bonded host may connect until it does or the window ends.
-constexpr uint16_t hostPrevUsage = 0x0010, hostNextUsage = 0x0011;
+// Switching: only the selected slot's host may connect until it does or the
+// window ends; after that any slotted host is accepted again.
 std::atomic<bool> switching{false};
 uint32_t switchSince = 0;
 constexpr uint32_t switchWindowMs = 15000;
-esp_bd_addr_t targetPeer = {};
+esp_bd_addr_t currentPeer = {};
+// Bonds are removed from the loop, not from Bluetooth callbacks.
+esp_bd_addr_t staleBond = {};
+std::atomic<bool> removeStaleBond{false};
 BLEServer *bleServer = nullptr;
 std::atomic<uint16_t> connId{0};
 BLECharacteristic *inputs[3] = {};
@@ -85,33 +94,74 @@ class SecurityCallbacks : public BLESecurityCallbacks {
   bool onSecurityRequest() override { return true; }
   bool onConfirmPIN(uint32_t) override { return false; }
   void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
-    if (result.success && switching) {
-      if (memcmp(targetPeer, result.bd_addr, sizeof(esp_bd_addr_t)) != 0) {
-        rejectHost = true;  // Not the host we switched to; keep the slot free.
-        return;
-      }
-      switching = false;
-    }
-    if (result.success && pairing && haveKickedPeer &&
-        memcmp(kickedPeer, result.bd_addr, sizeof(esp_bd_addr_t)) == 0) {
-      rejectHost = true;  // The host we dropped; keep the slot free for another one.
+    if (!result.success) {
+      authenticated = false;
       return;
     }
-    if (result.success) {
-      memcpy(currentPeer, result.bd_addr, sizeof(esp_bd_addr_t));
-      if (pairing) newHostPaired = true;
+    const int slot = slotOf(result.bd_addr);
+    int assign = -1;
+    if (pairing) {
+      if (slot >= 0) return reject();  // Belongs to another slot.
+      assign = selected;
+    } else if (switching) {
+      if (slot != selected) return reject();
+      switching = false;
+    } else if (slot < 0) {
+      // Unslotted bond (e.g. paired before slots existed): take a free slot.
+      for (int i = slotCount - 1; i >= 0; --i) {
+        if (!slotUsed[i]) assign = i;
+      }
+      if (assign < 0) {
+        memcpy(staleBond, result.bd_addr, sizeof(esp_bd_addr_t));
+        removeStaleBond = true;
+        return reject();
+      }
     }
-    authenticated = result.success;
+    if (assign >= 0) {
+      memcpy(slots[assign], result.bd_addr, sizeof(esp_bd_addr_t));
+      slotUsed[assign] = true;
+      slotsDirty = true;
+      selected = assign;
+      if (pairing) newHostPaired = true;
+      pairing = false;
+    } else {
+      selected = slot;
+    }
+    memcpy(currentPeer, result.bd_addr, sizeof(esp_bd_addr_t));
+    authenticated = true;
   }
+
+ private:
+  static int slotOf(const uint8_t *addr) {
+    for (int i = 0; i < slotCount; ++i) {
+      if (slotUsed[i] && memcmp(slots[i], addr, sizeof(esp_bd_addr_t)) == 0) return i;
+    }
+    return -1;
+  }
+  static void reject() { rejectHost = true; }  // Keep the connection free.
 };
 
-void startPairing() {
-  haveKickedPeer = connected && authenticated;
-  if (haveKickedPeer) memcpy(kickedPeer, currentPeer, sizeof(esp_bd_addr_t));
-  pairingSince = millis();
-  newHostPaired = false;
-  switching = false;
-  pairing = true;
+void loadSlots() {
+  prefs.begin("hosts");
+  uint8_t data[slotCount * 7] = {};
+  if (prefs.getBytes("slots", data, sizeof(data)) == sizeof(data)) {
+    for (int i = 0; i < slotCount; ++i) {
+      slotUsed[i] = data[i * 7];
+      memcpy(slots[i], data + i * 7 + 1, sizeof(esp_bd_addr_t));
+    }
+  }
+}
+
+void saveSlots() {
+  uint8_t data[slotCount * 7] = {};
+  for (int i = 0; i < slotCount; ++i) {
+    data[i * 7] = slotUsed[i];
+    memcpy(data + i * 7 + 1, slots[i], sizeof(esp_bd_addr_t));
+  }
+  prefs.putBytes("slots", data, sizeof(data));
+}
+
+void dropConnection() {
   if (connected) {
     releaseAll();
     bleServer->disconnect(connId);  // onDisconnect restarts advertising.
@@ -120,26 +170,28 @@ void startPairing() {
   }
 }
 
-// step is +1 (next) or -1 (previous) through the bonded hosts, sorted by address.
-void switchHost(int step) {
-  esp_ble_bond_dev_t bonds[8];
-  int count = std::min(esp_ble_get_bond_device_num(), 8);
-  if (count < 2 || esp_ble_get_bond_device_list(&count, bonds) != ESP_OK || count < 2) return;
-  std::sort(bonds, bonds + count, [](const esp_ble_bond_dev_t &a, const esp_ble_bond_dev_t &b) {
-    return memcmp(a.bd_addr, b.bd_addr, sizeof(esp_bd_addr_t)) < 0;
-  });
-  // Repeated steps continue from the pending target, so the encoder can scroll.
-  const uint8_t *from = switching ? targetPeer : currentPeer;
-  int index = -1;
-  for (int i = 0; i < count; ++i) {
-    if (memcmp(bonds[i].bd_addr, from, sizeof(esp_bd_addr_t)) == 0) index = i;
+// Empty the selected slot (forgetting its host) and wait for a new host.
+void startPairing() {
+  const int slot = selected;
+  if (slotUsed[slot]) {
+    esp_ble_remove_bond_device(slots[slot]);
+    slotUsed[slot] = false;
+    saveSlots();
   }
-  index = index < 0 ? (step > 0 ? 0 : count - 1) : (index + step + count) % count;
-  memcpy(targetPeer, bonds[index].bd_addr, sizeof(esp_bd_addr_t));
+  pairingSince = millis();
+  newHostPaired = false;
+  switching = false;
+  pairing = true;
+  dropConnection();
+}
+
+void selectSlot(int slot) {
+  selected = slot;
+  if (!slotUsed[slot]) return startPairing();  // Empty slot: pair a host into it.
   pairing = false;
   if (connected && authenticated &&
-      memcmp(currentPeer, targetPeer, sizeof(esp_bd_addr_t)) == 0) {
-    switching = false;  // Scrolled back to the host we are on.
+      memcmp(currentPeer, slots[slot], sizeof(esp_bd_addr_t)) == 0) {
+    switching = false;  // Already on this host.
     return;
   }
   switchSince = millis();
@@ -293,8 +345,8 @@ void processEvent(const UsbEvent &event) {
     if (!routeReport(event.interfaceNumber, event.data, event.length, report)) return;
     if (report.id == 4) {
       const uint16_t usage = report.data[0] | report.data[1] << 8;
-      if (usage == hostPrevUsage || usage == hostNextUsage) {
-        switchHost(usage == hostNextUsage ? 1 : -1);
+      if (usage >= slotUsageBase && usage < slotUsageBase + slotCount) {
+        selectSlot(usage - slotUsageBase);
         return;
       }
     }
@@ -333,10 +385,11 @@ void bridgeSetup() {
   Serial.setTxTimeoutMs(10);
   events = xQueueCreate(64, sizeof(UsbEvent));
   if (!events) failed = true;
+  loadSlots();
   startBle();
   Serial.println("Hidpress S3 native bridge v1: USB host DISARMED.");
   Serial.println("BLE: Hidpress S3 Bridge. BOOT arms host only off the Mac.");
-  Serial.println("Hold BOOT 5 s to pair a new host.");
+  Serial.println("Hold BOOT 5 s to pair a new host into the selected slot.");
 }
 
 void bridgeLoop() {
@@ -344,6 +397,8 @@ void bridgeLoop() {
   if (rejectHost.exchange(false)) bleServer->disconnect(connId);
   if (pairing && millis() - pairingSince >= pairingWindowMs) pairing = false;
   if (switching && millis() - switchSince >= switchWindowMs) switching = false;
+  if (slotsDirty.exchange(false)) saveSlots();
+  if (removeStaleBond.exchange(false)) esp_ble_remove_bond_device(staleBond);
   // Hold BOOT for 5 s at any time after boot to pair a new host.
   static bool pairButtonReleased = false;
   static uint32_t pairButtonSince = 0;
@@ -392,8 +447,8 @@ void bridgeLoop() {
   }
   static uint32_t lastStatus = 0;
   if (!hostStarted && millis() - lastStatus >= 5000) {
-    Serial.printf("Host DISARMED; BLE connected=%d authenticated=%d; Mac USB=%d; heap=%u\r\n",
-                  int(connected.load()), int(authenticated.load()),
+    Serial.printf("Host DISARMED; BLE connected=%d authenticated=%d slot=%d; Mac USB=%d; heap=%u\r\n",
+                  int(connected.load()), int(authenticated.load()), selected.load() + 1,
                   int(HWCDC::isPlugged()), ESP.getFreeHeap());
     lastStatus = millis();
   }

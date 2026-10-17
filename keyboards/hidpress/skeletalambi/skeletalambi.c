@@ -6,9 +6,37 @@ int actuation = 256;
 uint32_t actuation_display_timer = 0;
 bool showing_actuation = false;
 bool drag_active = false;
+uint8_t bt_slot = 1;
+uint32_t bt_display_timer = 0;
+bool showing_bt = false;
 
 #ifdef OLED_ENABLE
 #include "i2c_master.h"
+
+// The OLED font has no letters, so draw "BT" over "0N" with a 5x7 font at 2x.
+static const uint8_t bt_glyphs[][7] = {
+    {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}, // B
+    {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}, // T
+    {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}, // 0
+    {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}, // 1
+    {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}, // 2
+    {0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E}, // 3
+};
+
+static void draw_bt_glyph(uint8_t glyph, uint8_t x, uint8_t y) {
+    for (uint8_t row = 0; row < 14; row++) {
+        for (uint8_t col = 0; col < 10; col++) {
+            if (bt_glyphs[glyph][row / 2] & (0x10 >> (col / 2))) oled_write_pixel(x + col, y + row, true);
+        }
+    }
+}
+
+void render_bt_state(void) {
+    draw_bt_glyph(0, 53, 1);
+    draw_bt_glyph(1, 65, 1);
+    draw_bt_glyph(2, 53, 17);
+    draw_bt_glyph(2 + bt_slot, 65, 17);
+}
 
 // Send display off command before OLED driver initializes
 void keyboard_pre_init_user(void) {
@@ -515,6 +543,15 @@ bool oled_task_user(void) {
     }
 
     static bool was_showing_actuation = false;
+
+    if (showing_bt) {
+        if (timer_elapsed32(bt_display_timer) <= ACTUATION_DISPLAY_DURATION) {
+            render_bt_state();
+            return false;
+        }
+        showing_bt = false;
+        oled_clear();
+    }
 
     if (showing_actuation) {
         if (!was_showing_actuation) {

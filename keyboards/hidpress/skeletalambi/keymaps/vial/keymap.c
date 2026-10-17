@@ -23,6 +23,7 @@ typedef struct {
     uint8_t mode;
     uint8_t actuation_index;
     uint8_t drag;
+    uint8_t bt_slot;
 } state_sync_t;
 
 // state_sync_slave_handler defined below after variable declarations
@@ -40,8 +41,8 @@ enum custom_keycodes {
     ACT_RESET,
     ENC_MOD,
     KC_JOYSTICK_BUTTON,
-    BT_PREV,     // Bridge: previous paired host
-    BT_NEXT      // Bridge: next paired host
+    BT_PREV,     // Bridge: previous host slot
+    BT_NEXT      // Bridge: next host slot
 };
 
 // --- Per-Layer State ---
@@ -59,6 +60,14 @@ void state_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t ou
         actuation = actuation_values[state->actuation_index];
         showing_actuation = true;
         actuation_display_timer = timer_read32();
+#ifdef OLED_ENABLE
+        oled_clear();
+#endif
+    }
+    if (state->bt_slot != bt_slot) {
+        bt_slot = state->bt_slot;
+        showing_bt = true;
+        bt_display_timer = timer_read32();
 #ifdef OLED_ENABLE
         oled_clear();
 #endif
@@ -290,14 +299,21 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             enc_mod_held = record->event.pressed;
             return false;
 
-        // The S3 bridge catches these reserved consumer usages and switches
-        // BLE host; a computer on direct USB ignores them.
+        // The S3 bridge catches reserved consumer usage 0x0010 + slot and
+        // switches to BLE host slot 1-3; a computer on direct USB ignores it.
         case BT_PREV:
-            host_consumer_send(record->event.pressed ? 0x0010 : 0);
-            return false;
-
         case BT_NEXT:
-            host_consumer_send(record->event.pressed ? 0x0011 : 0);
+            if (record->event.pressed) {
+                bt_slot = keycode == BT_NEXT ? bt_slot % 3 + 1 : (bt_slot + 1) % 3 + 1;
+                host_consumer_send(0x0010 + bt_slot);
+                showing_bt = true;
+                bt_display_timer = timer_read32();
+#ifdef OLED_ENABLE
+                oled_clear();
+#endif
+            } else {
+                host_consumer_send(0);
+            }
             return false;
     }
     return true;
@@ -467,6 +483,7 @@ void housekeeping_task_user(void) {
                 .mode = current_mode,
                 .actuation_index = current_actuation_index,
                 .drag = drag_active ? 1 : 0,
+                .bt_slot = bt_slot,
             };
             transaction_rpc_send(USER_SYNC_STATE, sizeof(state), &state);
             last_state_sync = timer_read32();

@@ -40,12 +40,12 @@
         },
         {
             "name": "BT Prev",
-            "title": "Bridge: switch to previous paired host",
+            "title": "Bridge: previous host slot (1-3)",
             "shortName": "BT-"
         },
         {
             "name": "BT Next",
-            "title": "Bridge: switch to next paired host",
+            "title": "Bridge: next host slot (1-3)",
             "shortName": "BT+"
         }
     ],
