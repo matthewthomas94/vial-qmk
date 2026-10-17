@@ -16,6 +16,9 @@ extern int actuation;
 extern bool showing_actuation;
 extern uint32_t actuation_display_timer;
 extern bool drag_active;
+extern uint8_t bt_slot;  // Bridge host slot, 1-3
+extern uint32_t bt_display_timer;
+extern bool showing_bt;
 
 void register_oled_activity(void);
 

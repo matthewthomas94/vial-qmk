@@ -87,7 +87,7 @@
 // #define AZOTEQ_IQS5XX_SWIPE_X_ENABLE true
 
 // Encoder (right side only)
-#define ENCODER_RESOLUTION 4
+#define ENCODER_RESOLUTION 2
 #define ENCODERS_PAD_A_RIGHT { GP28 }
 #define ENCODERS_PAD_B_RIGHT { GP29 }
 

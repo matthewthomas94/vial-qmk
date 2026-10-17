@@ -13,7 +13,10 @@
         {"name": "Act Up", "title": "Increase Actuation Point", "shortName": "Act+"},
         {"name": "Act Down", "title": "Decrease Actuation Point", "shortName": "Act-"},
         {"name": "Act Rst", "title": "Reset Actuation Point", "shortName": "ActR"},
-        {"name": "Enc Mod", "title": "Hold to shift encoder to actuation mode", "shortName": "EncM"}
+        {"name": "Enc Mod", "title": "Hold + turn encoder to switch BT host slot", "shortName": "EncM"},
+        {"name": "Joy Btn", "title": "Joystick Button (default)", "shortName": "JoyB"},
+        {"name": "BT Prev", "title": "Bridge: previous host slot (1-3)", "shortName": "BT-"},
+        {"name": "BT Next", "title": "Bridge: next host slot (1-3)", "shortName": "BT+"}
     ],
     "layouts": {
         "keymap": [

@@ -6,9 +6,36 @@ int actuation = 256;
 uint32_t actuation_display_timer = 0;
 bool showing_actuation = false;
 bool drag_active = false;
+uint8_t bt_slot = 1;
+uint32_t bt_display_timer = 0;
+bool showing_bt = false;
 
 #ifdef OLED_ENABLE
 #include "i2c_master.h"
+
+// Same layout as the actuation screen: the big digit glyphs from glcdfont
+// (1 = 0x3E, 2 = 0x3C, 3 = 0x3A), with "BT" drawn in the label slot since
+// the font has no B. The panel is mounted rotated: viewed (vx, vy) is raw
+// pixel (127 - vy, vx).
+static const uint8_t bt_label[2][6] = {
+    {0x1E, 0x11, 0x1E, 0x11, 0x11, 0x1E}, // B
+    {0x1F, 0x04, 0x08, 0x08, 0x08, 0x08}, // T
+};
+
+void render_bt_state(void) {
+    uint8_t digit = 0x3E - 2 * (bt_slot - 1);
+    for (uint8_t line = 0; line < 3; line++) {
+        oled_set_cursor(9, line);
+        oled_write_char(digit + 0x20 * line, false);
+        oled_write_char(digit + 1 + 0x20 * line, false);
+    }
+    for (uint8_t row = 0; row < 6; row++) {
+        for (uint8_t col = 0; col < 5; col++) {
+            if (bt_label[0][row] & (0x10 >> col)) oled_write_pixel(77 - row, 6 + col, true);
+            if (bt_label[1][row] & (0x10 >> col)) oled_write_pixel(77 - row, 13 + col, true);
+        }
+    }
+}
 
 // Send display off command before OLED driver initializes
 void keyboard_pre_init_user(void) {
@@ -515,6 +542,15 @@ bool oled_task_user(void) {
     }
 
     static bool was_showing_actuation = false;
+
+    if (showing_bt) {
+        if (timer_elapsed32(bt_display_timer) <= ACTUATION_DISPLAY_DURATION) {
+            render_bt_state();
+            return false;
+        }
+        showing_bt = false;
+        oled_clear();
+    }
 
     if (showing_actuation) {
         if (!was_showing_actuation) {

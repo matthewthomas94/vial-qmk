@@ -11,7 +11,9 @@ enum custom_keycodes {
     ACT_UP,     // Increase actuation
     ACT_DOWN,   // Decrease actuation
     ACT_RESET,   // Reset actuation to default
-    KC_JOYSTICK_BUTTON
+    KC_JOYSTICK_BUTTON,
+    BT_PREV,     // Bridge: previous host slot
+    BT_NEXT      // Bridge: next host slot
 };
 
 enum pointing_device_mode current_mode = MODE_MOUSE; // Adjusted line
@@ -134,11 +136,41 @@ static bool joystick_button_pressed = false;
 const uint16_t actuation_values[] = {352, 320, 256, 128, 64};  // Values from highest to lowest
 uint8_t current_actuation_index = 2;  // Start at center (256)
 
+// The S3 bridge catches reserved consumer usage 0x0010 + slot and switches to
+// BLE host slot 1-3; a computer on direct USB ignores it.
+static void process_bt_step(bool next, bool pressed) {
+    if (pressed) {
+        bt_slot = next ? bt_slot % 3 + 1 : (bt_slot + 1) % 3 + 1;
+        host_consumer_send(0x0010 + bt_slot);
+        showing_bt = true;
+        bt_display_timer = timer_read32();
+        oled_clear();
+    } else {
+        host_consumer_send(0);
+    }
+}
+
+// TMB_MODE (encoder 1's push) held: encoder 1 switches BT host slot instead,
+// and the mode change on release is skipped.
+static bool tmb_mode_held = false;
+static bool tmb_mode_used = false;
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Wake OLED screensaver on any key activity
     register_oled_activity();
 
+    if (tmb_mode_held && IS_ENCODEREVENT(record->event) && record->event.key.col == 0) {
+        tmb_mode_used = true;
+        process_bt_step(record->event.type == ENCODER_CW_EVENT, record->event.pressed);
+        return false;  // suppress the encoder map keycode
+    }
+
     switch (keycode) {
+
+        case BT_PREV:
+        case BT_NEXT:
+            process_bt_step(keycode == BT_NEXT, record->event.pressed);
+            return false;
 
         case ACT_DOWN:
             if (record->event.pressed) {
@@ -190,7 +222,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case TMB_MODE:
+            tmb_mode_held = record->event.pressed;
             if (record->event.pressed) {
+                tmb_mode_used = false;
+            } else if (!tmb_mode_used) {
                 current_mode = (current_mode + 1) % MODE_COUNT;
                 // Save the new mode for the current layer
                 layer_modes[get_highest_layer(layer_state)] = current_mode;
