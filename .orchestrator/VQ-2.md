@@ -1,11 +1,13 @@
 ---
 id: VQ-2
 title: Bridge host slots - lock to the selected host, pair without kicking saved hosts, recover from keyboard unplug
-status: ready
+status: verification_blocked
+verification_blocker: "physical BLE/USB test on the S3-Zero with the user's Mac and a second device"
+verification_resume: "user uploads the build and reports the manual test results"
 priority: high
 execution_mode: implementation
 depends_on: []
-run_id: null
+run_id: 217
 canceled: false
 worker_model: strong
 worker_effort: high
@@ -64,15 +66,23 @@ host), and the power/USB-role guards in `startHost()`.
 
 ## Acceptance criteria
 
-- [ ] Selecting a saved slot keeps the bridge on that slot with no time limit; only that slot's host can connect; the LED flashes white until it does.
-- [ ] While waiting on a selected or empty slot, hosts saved in other slots are not connected and then disconnected. If the BLE stack makes this impossible, the README states why and what the closest achievable behaviour is.
-- [ ] Selecting an empty slot still enters pairing mode for that slot, a newly paired host lands in that slot, and BOOT-5 s re-pairing still works.
-- [ ] A USB transfer error or detach from the keyboard is handled as a disconnect (inputs released, interfaces closed, `opened[]` cleared), and the next keyboard attach resumes forwarding without a bridge restart.
-- [ ] The README's Host Slots section, LED table and upgrade notes describe the new behaviour, the chosen BLE mechanism, and whether existing pairings survive the upgrade or exactly what must be re-paired.
-- [ ] Slot and pairing decision logic that can run off-device has host-side tests next to `tests/report_router_test.cpp`; those tests and the README's `arduino-cli compile` command pass. Do not upload to any device.
+- [x] Selecting a saved slot keeps the bridge on that slot with no time limit; only that slot's host can connect; the LED flashes white until it does.
+- [x] While waiting on a selected or empty slot, hosts saved in other slots are not connected and then disconnected. If the BLE stack makes this impossible, the README states why and what the closest achievable behaviour is.
+- [x] Selecting an empty slot still enters pairing mode for that slot, a newly paired host lands in that slot, and BOOT-5 s re-pairing still works.
+- [x] A USB transfer error or detach from the keyboard is handled as a disconnect (inputs released, interfaces closed, `opened[]` cleared), and the next keyboard attach resumes forwarding without a bridge restart.
+- [x] The README's Host Slots section, LED table and upgrade notes describe the new behaviour, the chosen BLE mechanism, and whether existing pairings survive the upgrade or exactly what must be re-paired.
+- [x] Slot and pairing decision logic that can run off-device has host-side tests next to `tests/report_router_test.cpp`; those tests and the README's `arduino-cli compile` command pass. Do not upload to any device.
 - [ ] The README gains a short manual test list: Mac on slot 1, a second device on slot 2, switching 1 -> 2 -> 1 several times without clicking Connect, empty-slot pairing, and keyboard unplug/replug. These need the user's hardware: if everything else is complete, finish as `verification_blocked` with blocker "physical BLE/USB test on the S3-Zero with the user's Mac and a second device" and resume "user uploads the build and reports the manual test results".
 
 ## Required inputs
 
 - [x] Integration base: the slot firmware exists only on branch `claude/hidpress-s3-bluetooth-bridge-eb0170` (worktree `.claude/worktrees/vibrant-bhaskara-8f595f`, head `d93f103599`), not on `vial`. Decide whether to fast-forward `vial` to that branch before dispatch. The main checkout's untracked, older `keyboards/hidpress/bridge-diagnostics/` copy (holding private git-ignored `backups/` flash images and `logs/`) blocks the fast-forward and must be preserved or moved first, not deleted.
   - Resolved 2026-10-17: user approved merging the branch into `vial` (merge commit `a0d252ad62`; a fast-forward was no longer possible). The git-ignored `backups/`, `logs/` and `build/` folders were kept in place under `keyboards/hidpress/bridge-diagnostics/`. Work from `vial`.
+
+## Run log
+
+- **Run 217** (attempt 4) — branch `relay/vq-2`
+  - Reviewed implementation commit `901f67378c` (from an earlier attempt that never updated this ticket): per-slot local BLE addresses (slot 1 public, slots 2-3 static random with a generation bump on re-pair), saved slots locked with no timeout, roaming over saved slots after boot, USB transfer error/detach handled as a disconnect, slot policy in `host_slots.h` with `tests/host_slots_test.cpp`.
+  - Checked against ESP-IDF v5.3.2 (`6920def9f0`) Bluedroid source: `smp_build_id_addr_cmd` sends the static random address as identity when advertising from it, and `BTM_BleUpdateOwnType` resets to public for slot 1, so each host stores a separate device identity. The bundled BLE library (3.1.3) does not restart advertising on disconnect by itself. Added a README paragraph explaining why per-slot addresses beat an accept list or directed advertising (`9a129e883a`).
+  - Verified: `report_router_test` and `host_slots_test` pass; README `arduino-cli compile` passes (1,070,512 bytes, 81%). Nothing uploaded.
+  - Outstanding: the hardware manual test list in the README (Mac on slot 1, second device on slot 2, switching 1 > 2 > 1, empty-slot pairing, unplug/replug). Status `verification_blocked` until the user runs it.
