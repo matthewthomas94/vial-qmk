@@ -5,6 +5,7 @@
 #include <BLE2902.h>
 #include <BLESecurity.h>
 #include <HWCDC.h>
+#include <algorithm>
 #include <atomic>
 #include "usb/usb_host.h"
 #include <UsbHostHid.h>
@@ -23,6 +24,13 @@ uint32_t pairingSince = 0;
 constexpr uint32_t pairingHoldMs = 5000, pairingWindowMs = 60000;
 esp_bd_addr_t currentPeer = {}, kickedPeer = {};
 bool haveKickedPeer = false;
+// Host switching: BT_PREV/BT_NEXT on the keyboard send these reserved consumer
+// usages. Only the chosen bonded host may connect until it does or the window ends.
+constexpr uint16_t hostPrevUsage = 0x0010, hostNextUsage = 0x0011;
+std::atomic<bool> switching{false};
+uint32_t switchSince = 0;
+constexpr uint32_t switchWindowMs = 15000;
+esp_bd_addr_t targetPeer = {};
 BLEServer *bleServer = nullptr;
 std::atomic<uint16_t> connId{0};
 BLECharacteristic *inputs[3] = {};
@@ -77,6 +85,13 @@ class SecurityCallbacks : public BLESecurityCallbacks {
   bool onSecurityRequest() override { return true; }
   bool onConfirmPIN(uint32_t) override { return false; }
   void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
+    if (result.success && switching) {
+      if (memcmp(targetPeer, result.bd_addr, sizeof(esp_bd_addr_t)) != 0) {
+        rejectHost = true;  // Not the host we switched to; keep the slot free.
+        return;
+      }
+      switching = false;
+    }
     if (result.success && pairing && haveKickedPeer &&
         memcmp(kickedPeer, result.bd_addr, sizeof(esp_bd_addr_t)) == 0) {
       rejectHost = true;  // The host we dropped; keep the slot free for another one.
@@ -95,12 +110,43 @@ void startPairing() {
   if (haveKickedPeer) memcpy(kickedPeer, currentPeer, sizeof(esp_bd_addr_t));
   pairingSince = millis();
   newHostPaired = false;
+  switching = false;
   pairing = true;
   if (connected) {
     releaseAll();
     bleServer->disconnect(connId);  // onDisconnect restarts advertising.
   } else {
     BLEDevice::startAdvertising();
+  }
+}
+
+// step is +1 (next) or -1 (previous) through the bonded hosts, sorted by address.
+void switchHost(int step) {
+  esp_ble_bond_dev_t bonds[8];
+  int count = std::min(esp_ble_get_bond_device_num(), 8);
+  if (count < 2 || esp_ble_get_bond_device_list(&count, bonds) != ESP_OK || count < 2) return;
+  std::sort(bonds, bonds + count, [](const esp_ble_bond_dev_t &a, const esp_ble_bond_dev_t &b) {
+    return memcmp(a.bd_addr, b.bd_addr, sizeof(esp_bd_addr_t)) < 0;
+  });
+  // Repeated steps continue from the pending target, so the encoder can scroll.
+  const uint8_t *from = switching ? targetPeer : currentPeer;
+  int index = -1;
+  for (int i = 0; i < count; ++i) {
+    if (memcmp(bonds[i].bd_addr, from, sizeof(esp_bd_addr_t)) == 0) index = i;
+  }
+  index = index < 0 ? (step > 0 ? 0 : count - 1) : (index + step + count) % count;
+  memcpy(targetPeer, bonds[index].bd_addr, sizeof(esp_bd_addr_t));
+  pairing = false;
+  if (connected && authenticated &&
+      memcmp(currentPeer, targetPeer, sizeof(esp_bd_addr_t)) == 0) {
+    switching = false;  // Scrolled back to the host we are on.
+    return;
+  }
+  switchSince = millis();
+  switching = true;
+  if (connected) {
+    releaseAll();
+    bleServer->disconnect(connId);  // onDisconnect restarts advertising.
   }
 }
 
@@ -245,6 +291,13 @@ void processEvent(const UsbEvent &event) {
   } else if (!failed && event.kind == EventKind::Input) {
     BleReport report{};
     if (!routeReport(event.interfaceNumber, event.data, event.length, report)) return;
+    if (report.id == 4) {
+      const uint16_t usage = report.data[0] | report.data[1] << 8;
+      if (usage == hostPrevUsage || usage == hostNextUsage) {
+        switchHost(usage == hostNextUsage ? 1 : -1);
+        return;
+      }
+    }
     for (size_t i = 0; i < 3; ++i) {
       if (ready[i] && report.id == reportIds[i]) {
         inputs[i]->setValue(report.data, report.length);
@@ -260,6 +313,7 @@ void updateLed() {
   uint32_t color;
   if (failed) color = led.Color(32, 0, 0);
   else if (pairing && !newHostPaired) color = (millis() / 250) % 2 ? led.Color(24, 0, 24) : 0;
+  else if (switching) color = (millis() / 250) % 2 ? led.Color(16, 16, 16) : 0;
   else if (!hostStarted) color = led.Color(0, 0, 24);
   else if (!opened[0] || !opened[1]) color = led.Color(28, 10, 0);
   else if (ready[0] && ready[1] && ready[2]) color = led.Color(0, 24, 0);
@@ -289,6 +343,7 @@ void bridgeLoop() {
   if (advertiseAgain.exchange(false)) BLEDevice::startAdvertising();
   if (rejectHost.exchange(false)) bleServer->disconnect(connId);
   if (pairing && millis() - pairingSince >= pairingWindowMs) pairing = false;
+  if (switching && millis() - switchSince >= switchWindowMs) switching = false;
   // Hold BOOT for 5 s at any time after boot to pair a new host.
   static bool pairButtonReleased = false;
   static uint32_t pairButtonSince = 0;

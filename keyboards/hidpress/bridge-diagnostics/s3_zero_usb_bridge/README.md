@@ -48,6 +48,7 @@ Once armed, USB serial disappears because the USB PHY is now used for host.
 | Cyan | USB interfaces opened, BLE not fully authenticated/subscribed |
 | Green | USB interfaces opened and all three BLE reports subscribed |
 | Flashing magenta | Pairing mode, waiting for a new host |
+| Flashing white | Switching to another paired host |
 | Red | USB setup, transfer, or queue error; forwarding stopped |
 
 Green indicates readiness, not proof of end-to-end input delivery.
@@ -74,6 +75,17 @@ current host is dropped and refused for 60 seconds, so it cannot take the
 connection back. Pair (or re-pair) the other host from its Bluetooth
 settings; the flashing stops once it connects. All pairings are kept, so the
 dropped host reconnects later whenever the bridge is free.
+
+## Switching Hosts
+
+Southpaw and Ambi Vial keymaps provide `BT Prev` and `BT Next` custom
+keycodes (assign them to an encoder's two directions in Vial). They send
+reserved consumer usages 0x0010 / 0x0011, which the bridge consumes and
+does not forward; a computer on direct USB ignores them. Each press steps
+through the bonded hosts (sorted by address), drops the current one and
+flashes white while only the selected host may connect. Further presses keep
+stepping from the selected host. After 15 seconds without it connecting, any
+paired host is accepted again. With fewer than two pairings it does nothing.
 
 ## Supported Inputs
 

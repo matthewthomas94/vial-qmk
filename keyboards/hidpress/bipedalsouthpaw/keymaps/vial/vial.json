@@ -32,6 +32,21 @@
             "name": "Act Rst",
             "title": "Reset Actuation Point",
             "shortName": "ActR"
+        },
+        {
+            "name": "Joy Btn",
+            "title": "Joystick Button (default)",
+            "shortName": "JoyB"
+        },
+        {
+            "name": "BT Prev",
+            "title": "Bridge: switch to previous paired host",
+            "shortName": "BT-"
+        },
+        {
+            "name": "BT Next",
+            "title": "Bridge: switch to next paired host",
+            "shortName": "BT+"
         }
     ],
     "matrix": {

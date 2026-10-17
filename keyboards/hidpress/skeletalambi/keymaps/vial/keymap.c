@@ -39,7 +39,9 @@ enum custom_keycodes {
     ACT_DOWN,
     ACT_RESET,
     ENC_MOD,
-    KC_JOYSTICK_BUTTON
+    KC_JOYSTICK_BUTTON,
+    BT_PREV,     // Bridge: previous paired host
+    BT_NEXT      // Bridge: next paired host
 };
 
 // --- Per-Layer State ---
@@ -286,6 +288,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
         case ENC_MOD:
             enc_mod_held = record->event.pressed;
+            return false;
+
+        // The S3 bridge catches these reserved consumer usages and switches
+        // BLE host; a computer on direct USB ignores them.
+        case BT_PREV:
+            host_consumer_send(record->event.pressed ? 0x0010 : 0);
+            return false;
+
+        case BT_NEXT:
+            host_consumer_send(record->event.pressed ? 0x0011 : 0);
             return false;
     }
     return true;

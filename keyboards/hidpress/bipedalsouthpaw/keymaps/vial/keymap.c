@@ -11,7 +11,9 @@ enum custom_keycodes {
     ACT_UP,     // Increase actuation
     ACT_DOWN,   // Decrease actuation
     ACT_RESET,   // Reset actuation to default
-    KC_JOYSTICK_BUTTON
+    KC_JOYSTICK_BUTTON,
+    BT_PREV,     // Bridge: previous paired host
+    BT_NEXT      // Bridge: next paired host
 };
 
 enum pointing_device_mode current_mode = MODE_MOUSE; // Adjusted line
@@ -139,6 +141,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     register_oled_activity();
 
     switch (keycode) {
+
+        // The S3 bridge catches these reserved consumer usages and switches
+        // BLE host; a computer on direct USB ignores them.
+        case BT_PREV:
+            host_consumer_send(record->event.pressed ? 0x0010 : 0);
+            return false;
+
+        case BT_NEXT:
+            host_consumer_send(record->event.pressed ? 0x0011 : 0);
+            return false;
 
         case ACT_DOWN:
             if (record->event.pressed) {
