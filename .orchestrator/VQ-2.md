@@ -1,7 +1,7 @@
 ---
 id: VQ-2
 title: Bridge host slots - lock to the selected host, pair without kicking saved hosts, recover from keyboard unplug
-status: backlog
+status: ready
 priority: high
 execution_mode: implementation
 depends_on: []
