@@ -47,12 +47,14 @@ Once armed, USB serial disappears because the USB PHY is now used for host.
 | Amber | Host armed, waiting for both supported USB interfaces |
 | Cyan | USB interfaces opened, BLE not fully authenticated/subscribed |
 | Green | USB interfaces opened and all three BLE reports subscribed |
-| Flashing magenta | Pairing mode, waiting for a new host |
-| Flashing white | Switching to another host slot |
-| Red | USB setup, transfer, or queue error; forwarding stopped |
+| Flashing magenta | Empty slot selected, pairing a new host (60 s) |
+| Flashing white | Saved slot selected, waiting for that slot's host |
+| Red | USB host stack, report read or event queue error; forwarding stopped |
 
 Green indicates readiness, not proof of end-to-end input delivery.
-After an error, disconnect power and inspect wiring before trying again.
+Unplugging the keyboard returns the LED to amber and replugging it to
+cyan/green without a restart; a USB open or transfer error does the same.
+Red needs a restart: disconnect power and inspect wiring before trying again.
 
 The S3-Zero LED uses RGB byte order, as documented in the
 [Waveshare FAQ](https://docs.waveshare.com/ESP32-S3-Zero/FAQ). The initial
@@ -78,22 +80,51 @@ OLED for a second, and sends reserved consumer usage 0x0010 + slot
 (0x0011-0x0013). The bridge consumes it and does not forward it; a
 computer on direct USB ignores it.
 
-- Slot with a host: the current host is dropped and the LED flashes white
-  while only that slot's host may connect. After 15 seconds without it
-  connecting, any slotted host is accepted again.
-- Empty slot: the bridge enters pairing mode for that slot (below).
+Each slot advertises from its own local BLE address: slot 1 keeps the
+board's public address, slots 2 and 3 use static random addresses derived
+from it. A host only knows the address it paired with, so it only ever
+sees and reconnects to its own slot; other hosts never connect, so there
+is no connect-then-kick. Every host appears as `Hidpress S3 Bridge`.
+
+- Slot with a host: the current host is dropped and the bridge advertises
+  only that slot's address, with no timeout. The LED flashes white until
+  that host reconnects by itself (no clicking Connect).
+- Empty slot: pairing mode. The LED flashes magenta for 60 seconds; pair
+  the new computer from its Bluetooth settings and it takes the slot. The
+  slot keeps accepting a new host after the flashing stops.
 - Hold BOOT 5 s (after boot, never during reset): forget the selected
-  slot's host and pair a new one into it.
+  slot's host and pair a new one into it. The slot gets a new address, so
+  the forgotten host no longer sees it; remove its old `Hidpress S3 Bridge`
+  entry on that host.
 
-Pairing mode flashes magenta for up to 60 seconds. The current host is
-dropped and hosts in other slots are refused; pair the new computer from
-its Bluetooth settings and it takes the slot. A forgotten host must remove
-the old `Hidpress S3 Bridge` pairing on its side before pairing again.
-
-The keyboard's slot counter starts at 01 on power-up and is not told which
+After boot no slot is chosen: the bridge starts on slot 1 and, while
+nothing connects, moves every 3 seconds through the saved slots, so any
+saved host can reconnect. Turning the dial locks onto a slot as above. The
+keyboard's slot counter starts at 01 on power-up and is not told which
 host the bridge reconnected to, so the OLED number may not match until the
-dial is turned. Bonds made before slots existed fill empty slots in the
-order they connect; a fourth host is refused and its bond removed.
+dial is turned.
+
+Edge cases:
+
+- A host connecting in the instant the roaming address changes is refused
+  once and retries on its own address.
+- A host keeps one slot. A saved host showing up on another slot's
+  address (connecting as it changes, or paired there on purpose as a
+  second `Hidpress S3 Bridge` entry) is refused after encryption and keeps
+  its own slot; to move a host, re-pair its old slot first. A new host
+  pairing on an occupied slot is refused and its bond removed. Bluedroid itself deletes a bond
+  when encryption fails, so if a host ever says the bridge is unavailable,
+  forget it on that host and pair again.
+- macOS connects with resolvable private addresses (RPAs). Bluedroid stores
+  each bond under the address used at pairing and reports that same
+  address on every reconnect, so slots stay matched across reconnects and
+  reboots. Slots also store the host's identity address, so a host that
+  pairs again keeps its slot.
+
+Upgrading from the previous slot firmware: the slot 1 pairing (normally
+the Mac) survives. Hosts saved in slots 2 and 3 are cleared on first boot
+because those slots now have new addresses: on each, forget
+`Hidpress S3 Bridge`, select the slot on the keyboard and pair again.
 
 ## Supported Inputs
 
@@ -116,7 +147,8 @@ USB callbacks copy events to a queue; blocking class requests and BLE
 notifications run outside the USB callback. USB disconnect releases all
 inputs; a fresh authenticated BLE subscription starts with released inputs.
 Queue overflow stops forwarding and attempts release instead of silently
-dropping a key-up. A USB error requires a reset in this prototype.
+dropping a key-up. A USB open or transfer error closes the interface and
+waits for the keyboard to be replugged; no reset is needed.
 
 ## Build And Test
 
@@ -141,11 +173,35 @@ env -u SDKROOT clang++ \
   bridge-diagnostics/tests/report_router_test.cpp \
   -o /tmp/hidpress-report-router-test-plain
 /tmp/hidpress-report-router-test-plain
+
+env -u SDKROOT clang++ \
+  -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk \
+  -std=c++17 -Wall -Wextra -Werror \
+  bridge-diagnostics/tests/host_slots_test.cpp \
+  -o /tmp/hidpress-host-slots-test
+/tmp/hidpress-host-slots-test
 ```
 
 The local SDK override avoids the host's clang / macOS 27 SDK mismatch;
 it is not a firmware dependency. The ctags override reuses the earlier
 diagnostic's native ctags build (see parent README).
+
+## Manual Host Slot Test
+
+Not yet run on hardware. With the Mac in slot 1 and a second device:
+
+1. Upgrade: after upload, the Mac reconnects on slot 1 without pairing.
+2. Empty-slot pairing: select slot 2; the LED flashes magenta and the Mac
+   drops. Pair the second device from its Bluetooth settings; LED green.
+   The Mac does not connect while slot 2 is selected.
+3. Switching: turn 1 > 2 > 1 several times. Each time the LED flashes
+   white, then only that slot's host reconnects by itself without
+   clicking Connect, and input goes only to it.
+4. Re-pair: hold BOOT 5 s on slot 2; magenta. Forget the bridge on the
+   second device and pair it again into slot 2.
+5. Keyboard unplug/replug while connected: amber, then cyan/green with
+   input working, no restart, no red.
+6. Power-cycle the bridge: any saved host reconnects without the dial.
 
 ## Backup Before Installation
 

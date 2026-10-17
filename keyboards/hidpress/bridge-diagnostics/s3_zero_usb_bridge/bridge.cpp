@@ -7,10 +7,12 @@
 #include <HWCDC.h>
 #include <Preferences.h>
 #include <atomic>
+#include <esp_bt_device.h>
 #include "usb/usb_host.h"
 #include <UsbHostHid.h>
 #include "hid_report_map.h"
 #include "report_router.h"
+#include "host_slots.h"
 
 namespace {
 constexpr uint8_t bootPin = 0;
@@ -18,25 +20,27 @@ Adafruit_NeoPixel led(1, 21, NEO_RGB + NEO_KHZ800);
 std::atomic<bool> connected{false}, authenticated{false}, failed{false};
 std::atomic<bool> advertiseAgain{false};
 // Three host slots, saved in flash. The keyboard's BT_PREV/BT_NEXT keys send
-// reserved consumer usage 0x0011 + slot to pick one.
-constexpr int slotCount = 3;
+// reserved consumer usage 0x0011 + slot to pick one. Each slot advertises its
+// own address (see host_slots.h).
 constexpr uint16_t slotUsageBase = 0x0011;
-esp_bd_addr_t slots[slotCount] = {};
-bool slotUsed[slotCount] = {};
+HostSlots hosts = {};
+uint8_t publicAddress[6] = {};
 std::atomic<int> selected{0};
 std::atomic<bool> slotsDirty{false};
 Preferences prefs;
-// Pairing mode: the selected slot is emptied and only a host in no slot may
-// connect; it takes the selected slot.
-std::atomic<bool> pairing{false}, newHostPaired{false}, rejectHost{false};
+// Picking a slot locks advertising to its address until another is picked.
+// Until then (after boot) advertising roams over the saved slots.
+std::atomic<bool> locked{false};
+std::atomic<int> advertised{0}, connectedSlot{0};
+uint32_t advertisedSince = 0;
+constexpr uint32_t roamDwellMs = 3000;
+esp_ble_adv_params_t advParams = {0x20, 0x40, ADV_TYPE_IND, BLE_ADDR_TYPE_PUBLIC, {},
+                                  BLE_ADDR_TYPE_PUBLIC, ADV_CHNL_ALL,
+                                  ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY};
+// Pairing mode: the selected slot was emptied and waits for a new host.
+std::atomic<bool> pairing{false}, rejectHost{false};
 uint32_t pairingSince = 0;
 constexpr uint32_t pairingHoldMs = 5000, pairingWindowMs = 60000;
-// Switching: only the selected slot's host may connect until it does or the
-// window ends; after that any slotted host is accepted again.
-std::atomic<bool> switching{false};
-uint32_t switchSince = 0;
-constexpr uint32_t switchWindowMs = 15000;
-esp_bd_addr_t currentPeer = {};
 // Bonds are removed from the loop, not from Bluetooth callbacks.
 esp_bd_addr_t staleBond = {};
 std::atomic<bool> removeStaleBond{false};
@@ -52,7 +56,7 @@ bool buttonReleased = false;
 uint32_t buttonSince = 0;
 hid_host_device_handle_t opened[2] = {};
 
-enum class EventKind : uint8_t { Attach, Input, Detach, Error };
+enum class EventKind : uint8_t { Attach, Input, Detach };
 struct UsbEvent {
   EventKind kind;
   hid_host_device_handle_t device;
@@ -79,6 +83,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     authenticated = false;
     connected = true;
     connId = param->connect.conn_id;
+    connectedSlot = advertised.load();
     esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT);
   }
   void onDisconnect(BLEServer *) override {
@@ -87,6 +92,23 @@ class ServerCallbacks : public BLEServerCallbacks {
     advertiseAgain = true;
   }
 };
+
+// Bluedroid keeps a bond under the address the host paired from (a macOS
+// private address) and reports that address on every reconnect, also
+// after a restart. If the host pairs again it gets a new bond address, so
+// hosts are also matched on the identity address from their PID key.
+void identityOf(const uint8_t *bond, uint8_t *identity) {
+  static esp_ble_bond_dev_t list[CONFIG_BT_SMP_MAX_BONDS];
+  memcpy(identity, bond, 6);
+  int count = CONFIG_BT_SMP_MAX_BONDS;
+  if (esp_ble_get_bond_device_list(&count, list) != ESP_OK) return;
+  for (int i = 0; i < count; ++i) {
+    if (memcmp(list[i].bd_addr, bond, 6) == 0 &&
+        (list[i].bond_key.key_mask & ESP_LE_KEY_PID)) {
+      memcpy(identity, list[i].bond_key.pid_key.static_addr, 6);
+    }
+  }
+}
 
 class SecurityCallbacks : public BLESecurityCallbacks {
   uint32_t onPassKeyRequest() override { return 0; }
@@ -98,67 +120,80 @@ class SecurityCallbacks : public BLESecurityCallbacks {
       authenticated = false;
       return;
     }
-    const int slot = slotOf(result.bd_addr);
-    int assign = -1;
-    if (pairing) {
-      if (slot >= 0) return reject();  // Belongs to another slot.
-      assign = selected;
-    } else if (switching) {
-      if (slot != selected) return reject();
-      switching = false;
-    } else if (slot < 0) {
-      // Unslotted bond (e.g. paired before slots existed): take a free slot.
-      for (int i = slotCount - 1; i >= 0; --i) {
-        if (!slotUsed[i]) assign = i;
-      }
-      if (assign < 0) {
-        memcpy(staleBond, result.bd_addr, sizeof(esp_bd_addr_t));
-        removeStaleBond = true;
-        return reject();
-      }
+    uint8_t identity[6];
+    identityOf(result.bd_addr, identity);
+    const int slot = connectedSlot;
+    const AuthAction action = decideAuth(hosts, slot, result.bd_addr, identity);
+    if (action == AuthAction::RejectAndForget) {
+      memcpy(staleBond, result.bd_addr, sizeof(esp_bd_addr_t));
+      removeStaleBond = true;
     }
-    if (assign >= 0) {
-      memcpy(slots[assign], result.bd_addr, sizeof(esp_bd_addr_t));
-      slotUsed[assign] = true;
+    if (action != AuthAction::Accept) {
+      rejectHost = true;  // Keep the connection free.
+      return;
+    }
+    if (!hosts.used[slot] || memcmp(hosts.bond[slot], result.bd_addr, 6) != 0 ||
+        memcmp(hosts.identity[slot], identity, 6) != 0) {
+      assignSlot(hosts, slot, result.bd_addr, identity);
       slotsDirty = true;
-      selected = assign;
-      if (pairing) newHostPaired = true;
-      pairing = false;
-    } else {
-      selected = slot;
     }
-    memcpy(currentPeer, result.bd_addr, sizeof(esp_bd_addr_t));
+    selected = slot;
+    pairing = false;
     authenticated = true;
   }
-
- private:
-  static int slotOf(const uint8_t *addr) {
-    for (int i = 0; i < slotCount; ++i) {
-      if (slotUsed[i] && memcmp(slots[i], addr, sizeof(esp_bd_addr_t)) == 0) return i;
-    }
-    return -1;
-  }
-  static void reject() { rejectHost = true; }  // Keep the connection free.
 };
 
+void saveSlots() {
+  uint8_t data[slotCount * 7] = {};
+  for (int i = 0; i < slotCount; ++i) {
+    data[i * 7] = hosts.used[i];
+    memcpy(data + i * 7 + 1, hosts.bond[i], sizeof(esp_bd_addr_t));
+  }
+  prefs.putBytes("slots", data, sizeof(data));
+  prefs.putBytes("ids", hosts.identity, sizeof(hosts.identity));
+  prefs.putBytes("gens", hosts.generation, sizeof(hosts.generation));
+}
+
+// Needs Bluetooth started: an upgrade reads and removes bonds.
 void loadSlots() {
   prefs.begin("hosts");
   uint8_t data[slotCount * 7] = {};
   if (prefs.getBytes("slots", data, sizeof(data)) == sizeof(data)) {
     for (int i = 0; i < slotCount; ++i) {
-      slotUsed[i] = data[i * 7];
-      memcpy(slots[i], data + i * 7 + 1, sizeof(esp_bd_addr_t));
+      hosts.used[i] = data[i * 7];
+      memcpy(hosts.bond[i], data + i * 7 + 1, sizeof(esp_bd_addr_t));
     }
   }
+  if (prefs.isKey("gens")) {
+    prefs.getBytes("ids", hosts.identity, sizeof(hosts.identity));
+    prefs.getBytes("gens", hosts.generation, sizeof(hosts.generation));
+    return;
+  }
+  // Before per-slot addresses every slot shared the public address, which
+  // slot 1 keeps. Hosts saved in slots 2 and 3 have to pair again.
+  for (int i = 0; i < slotCount; ++i) {
+    if (!hosts.used[i]) continue;
+    if (i == 0) {
+      identityOf(hosts.bond[0], hosts.identity[0]);
+    } else {
+      esp_ble_remove_bond_device(hosts.bond[i]);
+      clearSlot(hosts, i);
+    }
+  }
+  saveSlots();
 }
 
-void saveSlots() {
-  uint8_t data[slotCount * 7] = {};
-  for (int i = 0; i < slotCount; ++i) {
-    data[i * 7] = slotUsed[i];
-    memcpy(data + i * 7 + 1, slots[i], sizeof(esp_bd_addr_t));
-  }
-  prefs.putBytes("slots", data, sizeof(data));
+// Stop, move to the slot's address, start again. Bluedroid refuses a new
+// random address while advertising; its calls run in order.
+void advertise(int slot) {
+  uint8_t address[6];
+  const bool random = slotAddress(publicAddress, slot, hosts.generation[slot], address);
+  advertised = slot;
+  advertisedSince = millis();
+  esp_ble_gap_stop_advertising();
+  if (random) esp_ble_gap_set_rand_addr(address);
+  advParams.own_addr_type = random ? BLE_ADDR_TYPE_RANDOM : BLE_ADDR_TYPE_PUBLIC;
+  esp_ble_gap_start_advertising(&advParams);
 }
 
 void dropConnection() {
@@ -166,44 +201,37 @@ void dropConnection() {
     releaseAll();
     bleServer->disconnect(connId);  // onDisconnect restarts advertising.
   } else {
-    BLEDevice::startAdvertising();
+    advertise(selected);
   }
 }
 
 // Empty the selected slot (forgetting its host) and wait for a new host.
 void startPairing() {
   const int slot = selected;
-  if (slotUsed[slot]) {
-    esp_ble_remove_bond_device(slots[slot]);
-    slotUsed[slot] = false;
+  if (hosts.used[slot]) {
+    esp_ble_remove_bond_device(hosts.bond[slot]);
+    clearSlot(hosts, slot);
     saveSlots();
   }
   pairingSince = millis();
-  newHostPaired = false;
-  switching = false;
   pairing = true;
+  locked = true;
   dropConnection();
 }
 
 void selectSlot(int slot) {
   selected = slot;
-  if (!slotUsed[slot]) return startPairing();  // Empty slot: pair a host into it.
+  locked = true;
+  if (!hosts.used[slot]) return startPairing();  // Empty slot: pair a host into it.
   pairing = false;
-  if (connected && authenticated &&
-      memcmp(currentPeer, slots[slot], sizeof(esp_bd_addr_t)) == 0) {
-    switching = false;  // Already on this host.
-    return;
-  }
-  switchSince = millis();
-  switching = true;
-  if (connected) {
-    releaseAll();
-    bleServer->disconnect(connId);  // onDisconnect restarts advertising.
-  }
+  if (connected && connectedSlot == slot) return;  // Already on this slot's address.
+  dropConnection();
 }
 
 void startBle() {
   BLEDevice::init("Hidpress S3 Bridge");
+  memcpy(publicAddress, esp_bt_dev_get_address(), sizeof(publicAddress));
+  loadSlots();
   BLEDevice::setSecurityCallbacks(new SecurityCallbacks());
   BLEServer *server = bleServer = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
@@ -233,7 +261,13 @@ void startBle() {
   advertising->setAppearance(HID_KEYBOARD);
   advertising->addServiceUUID(hid->hidService()->getUUID());
   advertising->setScanResponse(true);
+  // Advertising data is set once here; advertise() only moves the address.
+  uint8_t address[6];
+  if (slotAddress(publicAddress, 0, hosts.generation[0], address)) {
+    advertising->setDeviceAddress(address, BLE_ADDR_TYPE_RANDOM);
+  }
   advertising->start();
+  advertisedSince = millis();
 }
 
 void enqueue(const UsbEvent &event) {
@@ -255,10 +289,9 @@ void interfaceEvent(hid_host_device_handle_t device,
     }
     event.kind = EventKind::Input;
     event.interfaceNumber = params.iface_num;
-  } else if (kind == HID_HOST_INTERFACE_EVENT_DISCONNECTED) {
-    event.kind = EventKind::Detach;
   } else {
-    event.kind = EventKind::Error;
+    // Unplugging shows up as transfer errors as well as a disconnect.
+    event.kind = EventKind::Detach;
   }
   enqueue(event);
 }
@@ -304,6 +337,19 @@ void startHost() {
   if (hid_host_install(&hidConfig) != ESP_OK) failed = true;
 }
 
+// Close an interface we opened. A transfer error and its disconnect both
+// arrive here, so only the first one closes it.
+void closeDevice(hid_host_device_handle_t device) {
+  for (auto &handle : opened) {
+    if (device && handle == device) {
+      handle = nullptr;
+      hid_host_device_close(device);
+    }
+  }
+}
+
+// Failures here close the interface and leave the LED amber; replugging the
+// keyboard tries again.
 void attachDevice(hid_host_device_handle_t device) {
   hid_host_dev_params_t params{};
   hid_host_dev_info_t info{};
@@ -312,32 +358,25 @@ void attachDevice(hid_host_device_handle_t device) {
   if (!isHidpressDevice(info.VID, info.PID)) return;
   if (params.iface_num != 0 && params.iface_num != 2) return;
   const size_t slot = params.iface_num == 0 ? 0 : 1;
-  if (opened[slot]) { failed = true; return; }
+  closeDevice(opened[slot]);  // Left over from a detach that never arrived.
   hid_host_device_config_t config{};
   config.callback = interfaceEvent;
-  if (hid_host_device_open(device, &config) != ESP_OK) {
-    failed = true;
-    return;
-  }
+  if (hid_host_device_open(device, &config) != ESP_OK) return;
   opened[slot] = device;
   // Only force boot on the keyboard. Boot mouse protocol would lose scrolling.
   if (slot == 0 &&
       (params.sub_class != HID_SUBCLASS_BOOT_INTERFACE ||
        params.proto != HID_PROTOCOL_KEYBOARD ||
        hid_class_request_set_protocol(device, HID_REPORT_PROTOCOL_BOOT) != ESP_OK)) {
-    failed = true;
-    return;
+    return closeDevice(device);
   }
-  if (hid_host_device_start(device) != ESP_OK) failed = true;
+  if (hid_host_device_start(device) != ESP_OK) closeDevice(device);
 }
 
 void processEvent(const UsbEvent &event) {
   if (event.kind == EventKind::Detach) {
     releaseAll();
-    for (auto &device : opened) {
-      if (device == event.device) device = nullptr;
-    }
-    hid_host_device_close(event.device);
+    closeDevice(event.device);
   } else if (!failed && event.kind == EventKind::Attach) {
     attachDevice(event.device);
   } else if (!failed && event.kind == EventKind::Input) {
@@ -356,16 +395,15 @@ void processEvent(const UsbEvent &event) {
         inputs[i]->notify();
       }
     }
-  } else if (event.kind == EventKind::Error) {
-    failed = true;
   }
 }
 
 void updateLed() {
   uint32_t color;
   if (failed) color = led.Color(32, 0, 0);
-  else if (pairing && !newHostPaired) color = (millis() / 250) % 2 ? led.Color(24, 0, 24) : 0;
-  else if (switching) color = (millis() / 250) % 2 ? led.Color(16, 16, 16) : 0;
+  else if (pairing) color = (millis() / 250) % 2 ? led.Color(24, 0, 24) : 0;
+  else if (locked && hosts.used[selected] && !(connected && authenticated))
+    color = (millis() / 250) % 2 ? led.Color(16, 16, 16) : 0;
   else if (!hostStarted) color = led.Color(0, 0, 24);
   else if (!opened[0] || !opened[1]) color = led.Color(28, 10, 0);
   else if (ready[0] && ready[1] && ready[2]) color = led.Color(0, 24, 0);
@@ -385,7 +423,6 @@ void bridgeSetup() {
   Serial.setTxTimeoutMs(10);
   events = xQueueCreate(64, sizeof(UsbEvent));
   if (!events) failed = true;
-  loadSlots();
   startBle();
   Serial.println("Hidpress S3 native bridge v1: USB host DISARMED.");
   Serial.println("BLE: Hidpress S3 Bridge. BOOT arms host only off the Mac.");
@@ -393,10 +430,15 @@ void bridgeSetup() {
 }
 
 void bridgeLoop() {
-  if (advertiseAgain.exchange(false)) BLEDevice::startAdvertising();
+  if (advertiseAgain.exchange(false)) advertise(selected);
   if (rejectHost.exchange(false)) bleServer->disconnect(connId);
+  // The window only times the LED; the empty slot keeps taking a new host.
   if (pairing && millis() - pairingSince >= pairingWindowMs) pairing = false;
-  if (switching && millis() - switchSince >= switchWindowMs) switching = false;
+  // No slot picked since boot: give each saved slot's address a turn.
+  if (!locked && !connected && millis() - advertisedSince >= roamDwellMs) {
+    const int next = nextRoamingSlot(hosts, advertised);
+    if (next != advertised) advertise(next);
+  }
   if (slotsDirty.exchange(false)) saveSlots();
   if (removeStaleBond.exchange(false)) esp_ble_remove_bond_device(staleBond);
   // Hold BOOT for 5 s at any time after boot to pair a new host.
