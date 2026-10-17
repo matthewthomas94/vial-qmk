@@ -86,6 +86,15 @@ from it. A host only knows the address it paired with, so it only ever
 sees and reconnects to its own slot; other hosts never connect, so there
 is no connect-then-kick. Every host appears as `Hidpress S3 Bridge`.
 
+Why per-slot addresses (as Logitech Easy-Switch does): when pairing from a
+static random address, Bluedroid sends that address as the bridge's
+identity (`smp_build_id_addr_cmd`, ESP-IDF v5.3.2), so each host stores a
+different device. An advertising accept list would also need to match
+macOS RPAs, which needs controller address resolution, and an open
+pairing slot cannot use one at all. Directed advertising likewise has to
+target a host's changing RPA and cannot pair a new host. Neither stops a
+host seeing every slot as the same device.
+
 - Slot with a host: the current host is dropped and the bridge advertises
   only that slot's address, with no timeout. The LED flashes white until
   that host reconnects by itself (no clicking Connect).
