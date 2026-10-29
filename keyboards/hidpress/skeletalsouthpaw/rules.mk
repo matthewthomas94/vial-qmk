@@ -1,0 +1,13 @@
+ENCODER_ENABLE = yes
+WS2812_DRIVER = vendor
+SERIAL_DRIVER = vendor
+OLED_DRIVER = ssd1306
+POINTING_DEVICE_DRIVER = analog_joystick
+
+SRC += analog.c
+
+JOYSTICK_ENABLE = yes
+JOYSTICK_DRIVER = analog
+
+
+

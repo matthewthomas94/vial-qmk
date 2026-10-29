@@ -1,0 +1,68 @@
+{
+    "name": "Skeletal Southpaw",
+    "lighting": "qmk_backlight",
+    "customKeycodes": [
+        {"name": "Thmbstk",
+         "title": "Tap: cycle thumbstick mode. Hold + turn encoder 1: BT host slot",
+         "shortName": "Thmb"
+        },
+        {"name": "Lyr Fwd",
+         "title": "Cycle Layer Forward",
+         "shortName": "LFwd"
+        },
+        {"name": "Lyr Bwd",
+         "title": "Cycle Layer Backward",
+         "shortName": "LBwd"
+        },
+        {"name": "Scrl Dir",
+         "title": "Invert Scroll Direction",
+         "shortName": "ScrlD"
+        },
+        {
+            "name": "Act Up",
+            "title": "Increase Actuation Point",
+            "shortName": "Act+"
+        },
+        {
+            "name": "Act Down",
+            "title": "Decrease Actuation Point",
+            "shortName": "Act-"
+        },
+        {
+            "name": "Act Rst",
+            "title": "Reset Actuation Point",
+            "shortName": "ActR"
+        },
+        {
+            "name": "Joy Btn",
+            "title": "Joystick Button (default)",
+            "shortName": "JoyB"
+        },
+        {
+            "name": "BT Prev",
+            "title": "Bridge: previous host slot (1-3)",
+            "shortName": "BT-"
+        },
+        {
+            "name": "BT Next",
+            "title": "Bridge: next host slot (1-3)",
+            "shortName": "BT+"
+        }
+    ],
+    "matrix": {
+        "rows": 4,
+        "cols": 7
+    },
+    "layouts": {
+        "labels": [],
+        "keymap":[
+            ["0,0\n\n\n\n\n\n\n\n\ne",{"x":0.25},"0,1\n\n\n\n\n\n\n\n\ne",{"x":0.25},"0,0","0,1","0,2","0,3"],
+            [{"y":-0.5,"x":8.75},"0,5"],
+            [{"y":-0.5,"x":3.5},"1,1","1,2","1,3"],
+            [{"y":-0.5},"1,0\n\n\n\n\n\n\n\n\ne",{"x":0.25},"1,1\n\n\n\n\n\n\n\n\ne",{"x":0.25},"1,0",{"x":4.25},"3,5","3,6","2,5"],
+            [{"y":-0.5,"x":3.5},"2,1","2,2","2,3",{"h":2},"3,4"],
+            [{"y":-0.5,"x":8.75},"1,5"],
+            [{"y":-0.5},"2,0\n\n\n\n\n\n\n\n\ne",{"x":0.25},"2,1\n\n\n\n\n\n\n\n\ne",{"x":0.25},"2,0",{"w":1.5},"3,1",{"w":1.5},"3,3"]
+        ]
+    }
+}
